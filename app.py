@@ -429,6 +429,16 @@ def api_proxy():
         return jsonify({'proxy': PROXY})
     return jsonify({'proxy': PROXY})
 
+@app.route('/api/stream/<job_id>')
+def api_stream(job_id):
+    job = get_job(job_id)
+    if not job or not job.get('filepath'):
+        return jsonify({'error': 'No file'}), 404
+    fp = job['filepath']
+    if not os.path.exists(fp):
+        return jsonify({'error': 'File not found'}), 404
+    return send_file(fp, conditional=True)
+
 @app.route('/api/reveal/<job_id>', methods=['POST'])
 def api_reveal(job_id):
     """Open the file's folder in Windows Explorer with the file selected."""

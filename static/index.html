@@ -784,6 +784,237 @@ header {
   flex-shrink: 0;
 }
 
+/* ── VIDEO PLAYER ── */
+.player-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0);
+  z-index: 300;
+  transition: background .25s;
+}
+.player-overlay.open { display: flex; flex-direction: column; }
+.player-overlay.visible { background: rgba(0,0,0,.96); }
+
+.player-wrap {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 0 0 0 0;
+}
+
+/* Top bar */
+.player-topbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 20px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+}
+.player-title {
+  font-size: 14px;
+  font-weight: 500;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.player-site-badge { flex-shrink: 0; }
+
+/* Video area */
+.player-video-area {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  gap: 0;
+}
+
+.player-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: #000;
+  position: relative;
+}
+
+video#mainVideo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+/* Playlist sidebar */
+.player-sidebar {
+  width: 280px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  overflow: hidden;
+}
+.player-sidebar-title {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text3);
+  padding: 12px 14px 8px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.player-playlist {
+  flex: 1;
+  overflow-y: auto;
+}
+.playlist-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: background .1s;
+  border-bottom: 1px solid var(--border);
+}
+.playlist-item:hover { background: var(--surface2); }
+.playlist-item.active { background: rgba(232,255,71,.07); border-left: 2px solid var(--accent); }
+.playlist-item img {
+  width: 56px; height: 34px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.playlist-item-info { flex: 1; min-width: 0; }
+.playlist-item-title {
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.playlist-item-meta {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--text3);
+  margin-top: 2px;
+}
+
+/* Controls */
+.player-controls {
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 12px 20px 14px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.player-progress-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.player-time {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--text3);
+  white-space: nowrap;
+  min-width: 90px;
+  text-align: right;
+}
+.seek-bar {
+  flex: 1;
+  -webkit-appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border2);
+  outline: none;
+  cursor: pointer;
+  position: relative;
+}
+.seek-bar::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  box-shadow: 0 0 6px rgba(232,255,71,.4);
+}
+
+.player-btn-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.p-btn {
+  width: 36px; height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--border2);
+  background: transparent;
+  color: var(--text2);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px;
+  transition: all .15s;
+  flex-shrink: 0;
+}
+.p-btn:hover { border-color: var(--accent); color: var(--accent); }
+.p-btn.active { background: rgba(232,255,71,.1); border-color: var(--accent); color: var(--accent); }
+.p-btn.play-btn {
+  width: 44px; height: 44px;
+  font-size: 18px;
+  background: var(--accent);
+  color: #080a0f;
+  border-color: var(--accent);
+}
+.p-btn.play-btn:hover { background: #f0ff6b; }
+
+.player-spacer { flex: 1; }
+
+/* Volume */
+.vol-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.vol-slider {
+  -webkit-appearance: none;
+  width: 80px; height: 3px;
+  border-radius: 2px;
+  background: var(--border2);
+  outline: none;
+  cursor: pointer;
+}
+.vol-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: var(--text2);
+  cursor: pointer;
+}
+
+/* Speed */
+.speed-select {
+  background: var(--bg);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  padding: 4px 8px;
+  color: var(--text);
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  outline: none;
+  cursor: pointer;
+}
+.speed-select:focus { border-color: var(--accent); }
+
 /* ── LIGHTBOX ── */
 .lightbox-bg {
   display: none;
@@ -907,6 +1138,57 @@ header {
       <div class="filter-chips" id="siteChips"></div>
     </div>
     <div class="job-list" id="jobList"></div>
+  </div>
+</div>
+
+<!-- VIDEO PLAYER -->
+<div class="player-overlay" id="playerOverlay">
+  <div class="player-wrap">
+    <div class="player-topbar">
+      <button class="p-btn" onclick="closePlayer()" title="Close">✕</button>
+      <div class="player-title" id="playerTitle">—</div>
+      <span class="player-site-badge" id="playerSiteBadge"></span>
+    </div>
+    <div class="player-video-area">
+      <div class="player-main">
+        <video id="mainVideo" preload="auto"></video>
+      </div>
+      <div class="player-sidebar">
+        <div class="player-sidebar-title">// up next</div>
+        <div class="player-playlist" id="playerPlaylist"></div>
+      </div>
+    </div>
+    <div class="player-controls">
+      <div class="player-progress-row">
+        <span class="player-time" id="playerTimeCur">0:00</span>
+        <input type="range" class="seek-bar" id="seekBar" min="0" max="1000" value="0" />
+        <span class="player-time" id="playerTimeDur">0:00</span>
+      </div>
+      <div class="player-btn-row">
+        <button class="p-btn" id="btnShuffle" onclick="toggleShuffle()" title="Shuffle">⇄</button>
+        <button class="p-btn" onclick="playPrev()" title="Previous">⏮</button>
+        <button class="p-btn play-btn" id="btnPlayPause" onclick="togglePlay()">▶</button>
+        <button class="p-btn" onclick="playNext()" title="Next">⏭</button>
+        <button class="p-btn" id="btnRepeatOne" onclick="toggleRepeatOne()" title="Repeat one">↺</button>
+        <button class="p-btn" id="btnLoopAll" onclick="toggleLoopAll()" title="Loop queue">⟳</button>
+        <div class="player-spacer"></div>
+        <div class="vol-wrap">
+          <button class="p-btn" id="btnMute" onclick="toggleMute()" title="Mute">🔊</button>
+          <input type="range" class="vol-slider" id="volSlider" min="0" max="1" step="0.02" value="1" oninput="setVolume(this.value)" />
+        </div>
+        <select class="speed-select" id="speedSelect" onchange="setSpeed(this.value)">
+          <option value="0.25">0.25×</option>
+          <option value="0.5">0.5×</option>
+          <option value="0.75">0.75×</option>
+          <option value="1" selected>1×</option>
+          <option value="1.25">1.25×</option>
+          <option value="1.5">1.5×</option>
+          <option value="2">2×</option>
+          <option value="3">3×</option>
+        </select>
+        <button class="p-btn" onclick="toggleFullscreen()" title="Fullscreen">⛶</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1204,12 +1486,18 @@ function createJobCard(j) {
   card.id = 'job-' + j.id;
   card.className = 'job-card';
 
+  const isDone = j.status === 'done' && j.filepath;
+  const thumbClick = isDone
+    ? `openPlayer('${j.id}')`
+    : `openLightbox('${esc(j.thumbnail)}')`;
+  const magIcon = isDone ? '▶' : '🔍';
+  const magStyle = isDone ? 'font-size:28px' : '';
   const thumb = j.thumbnail
-    ? `<div class="job-thumb-wrap" onclick="openLightbox('${esc(j.thumbnail)}')">
+    ? `<div class="job-thumb-wrap" onclick="${thumbClick}" style="${isDone ? 'cursor:pointer' : ''}">
         <img src="${esc(j.thumbnail)}" onerror="this.parentElement.style.display='none'" />
-        <div class="mag">🔍</div>
+        <div class="mag" style="${magStyle}">${magIcon}</div>
        </div>`
-    : `<div class="job-thumb-placeholder">🎬</div>`;
+    : `<div class="job-thumb-placeholder" ${isDone ? `onclick="openPlayer('${j.id}')" style="cursor:pointer"` : ''}>🎬</div>`;
 
   card.innerHTML = `
     <div class="job-inner">
@@ -1468,6 +1756,196 @@ async function revealInExplorer(jobId) {
   const data = await res.json();
   if (data.error) toast('Error: ' + data.error, 'error');
 }
+
+// ──────────────────── Video Player ────────────────────
+let playerQueue = [];   // job ids of done videos
+let playerIndex = 0;
+let shuffleOn = false;
+let repeatOne = false;
+let loopAll = false;
+let seekDragging = false;
+
+const vid = () => document.getElementById('mainVideo');
+
+function getDoneJobs() {
+  return Object.values(jobs)
+    .filter(j => j.status === 'done' && j.filepath)
+    .sort((a, b) => (a.created_at || 0) - (b.created_at || 0));
+}
+
+function openPlayer(jobId) {
+  const done = getDoneJobs();
+  if (!done.length) return;
+  playerQueue = done.map(j => j.id);
+  playerIndex = playerQueue.indexOf(jobId);
+  if (playerIndex < 0) playerIndex = 0;
+
+  const overlay = document.getElementById('playerOverlay');
+  overlay.classList.add('open');
+  requestAnimationFrame(() => requestAnimationFrame(() => overlay.classList.add('visible')));
+
+  loadPlayerTrack(playerIndex);
+  renderPlaylist();
+}
+
+function closePlayer() {
+  const overlay = document.getElementById('playerOverlay');
+  overlay.classList.remove('visible');
+  vid().pause();
+  vid().src = '';
+  setTimeout(() => overlay.classList.remove('open'), 250);
+}
+
+function loadPlayerTrack(idx) {
+  playerIndex = idx;
+  const id = playerQueue[idx];
+  const j = jobs[id];
+  if (!j) return;
+
+  const v = vid();
+  v.src = `/api/stream/${id}`;
+  v.playbackRate = parseFloat(document.getElementById('speedSelect').value) || 1;
+  v.load();
+  v.play().catch(() => {});
+
+  document.getElementById('playerTitle').textContent = j.title || 'Unknown';
+  document.getElementById('playerSiteBadge').innerHTML = siteBadgeHtml(j.site, j.url);
+
+  // Highlight active in playlist
+  document.querySelectorAll('.playlist-item').forEach((el, i) => {
+    el.classList.toggle('active', i === idx);
+    if (i === idx) el.scrollIntoView({ block: 'nearest' });
+  });
+}
+
+function renderPlaylist() {
+  const container = document.getElementById('playerPlaylist');
+  container.innerHTML = playerQueue.map((id, i) => {
+    const j = jobs[id];
+    if (!j) return '';
+    return `<div class="playlist-item${i === playerIndex ? ' active' : ''}" onclick="loadPlayerTrack(${i})">
+      ${j.thumbnail ? `<img src="${esc(j.thumbnail)}" onerror="this.style.display='none'" />` : ''}
+      <div class="playlist-item-info">
+        <div class="playlist-item-title">${esc(j.title || j.url)}</div>
+        <div class="playlist-item-meta">${siteBadgeHtml(j.site, j.url)}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function togglePlay() {
+  const v = vid();
+  v.paused ? v.play() : v.pause();
+}
+
+function playNext() {
+  if (shuffleOn) {
+    playerIndex = Math.floor(Math.random() * playerQueue.length);
+  } else {
+    playerIndex = (playerIndex + 1) % playerQueue.length;
+  }
+  loadPlayerTrack(playerIndex);
+  renderPlaylist();
+}
+
+function playPrev() {
+  const v = vid();
+  if (v.currentTime > 3) { v.currentTime = 0; return; }
+  playerIndex = (playerIndex - 1 + playerQueue.length) % playerQueue.length;
+  loadPlayerTrack(playerIndex);
+  renderPlaylist();
+}
+
+function toggleShuffle() {
+  shuffleOn = !shuffleOn;
+  document.getElementById('btnShuffle').classList.toggle('active', shuffleOn);
+}
+
+function toggleRepeatOne() {
+  repeatOne = !repeatOne;
+  loopAll = false;
+  document.getElementById('btnRepeatOne').classList.toggle('active', repeatOne);
+  document.getElementById('btnLoopAll').classList.remove('active');
+  vid().loop = repeatOne;
+}
+
+function toggleLoopAll() {
+  loopAll = !loopAll;
+  repeatOne = false;
+  vid().loop = false;
+  document.getElementById('btnLoopAll').classList.toggle('active', loopAll);
+  document.getElementById('btnRepeatOne').classList.remove('active');
+}
+
+function setSpeed(val) { vid().playbackRate = parseFloat(val); }
+
+function setVolume(val) {
+  const v = vid();
+  v.volume = parseFloat(val);
+  v.muted = false;
+  document.getElementById('btnMute').textContent = val == 0 ? '🔇' : '🔊';
+}
+
+function toggleMute() {
+  const v = vid();
+  v.muted = !v.muted;
+  document.getElementById('btnMute').textContent = v.muted ? '🔇' : '🔊';
+  if (!v.muted) document.getElementById('volSlider').value = v.volume;
+}
+
+function toggleFullscreen() {
+  const el = document.getElementById('mainVideo');
+  if (document.fullscreenElement) document.exitFullscreen();
+  else el.requestFullscreen?.();
+}
+
+function fmtTime(s) {
+  if (!isFinite(s)) return '0:00';
+  const m = Math.floor(s / 60), sec = Math.floor(s % 60);
+  return `${m}:${String(sec).padStart(2,'0')}`;
+}
+
+// Wire up video events
+document.addEventListener('DOMContentLoaded', () => {
+  const v = vid();
+
+  v.addEventListener('timeupdate', () => {
+    if (seekDragging) return;
+    const pct = v.duration ? (v.currentTime / v.duration) * 1000 : 0;
+    document.getElementById('seekBar').value = pct;
+    document.getElementById('playerTimeCur').textContent = fmtTime(v.currentTime);
+    document.getElementById('playerTimeDur').textContent = fmtTime(v.duration);
+  });
+
+  v.addEventListener('play',  () => document.getElementById('btnPlayPause').textContent = '⏸');
+  v.addEventListener('pause', () => document.getElementById('btnPlayPause').textContent = '▶');
+
+  v.addEventListener('ended', () => {
+    if (repeatOne) { v.play(); return; }
+    if (playerIndex < playerQueue.length - 1 || loopAll) playNext();
+  });
+
+  const seekBar = document.getElementById('seekBar');
+  seekBar.addEventListener('mousedown', () => seekDragging = true);
+  seekBar.addEventListener('input', () => {
+    if (v.duration) v.currentTime = (seekBar.value / 1000) * v.duration;
+  });
+  seekBar.addEventListener('mouseup', () => seekDragging = false);
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', e => {
+    if (!document.getElementById('playerOverlay').classList.contains('open')) return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+    if (e.key === 'Escape') closePlayer();
+    if (e.key === ' ') { e.preventDefault(); togglePlay(); }
+    if (e.key === 'ArrowRight') v.currentTime = Math.min(v.duration, v.currentTime + 10);
+    if (e.key === 'ArrowLeft')  v.currentTime = Math.max(0, v.currentTime - 10);
+    if (e.key === 'ArrowUp')    { v.volume = Math.min(1, v.volume + 0.1); document.getElementById('volSlider').value = v.volume; }
+    if (e.key === 'ArrowDown')  { v.volume = Math.max(0, v.volume - 0.1); document.getElementById('volSlider').value = v.volume; }
+    if (e.key === 'n') playNext();
+    if (e.key === 'p') playPrev();
+  });
+});
 
 // ──────────────────── Lightbox ────────────────────
 function openLightbox(src) {
