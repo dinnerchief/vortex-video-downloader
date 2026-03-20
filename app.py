@@ -485,6 +485,25 @@ def api_reveal(job_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/thumb')
+def api_thumb():
+    url = request.args.get('url', '').strip()
+    if not url:
+        return '', 400
+    try:
+        import urllib.request
+        req = urllib.request.Request(url, headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            'Referer': 'https://www.youtube.com/',
+        })
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = resp.read()
+            content_type = resp.headers.get('Content-Type', 'image/jpeg')
+        from flask import Response
+        return Response(data, content_type=content_type)
+    except Exception as e:
+        return str(e), 502
+
 if __name__ == '__main__':
     load_state()
     app.run(debug=False, host='0.0.0.0', port=7860, threaded=True)

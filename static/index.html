@@ -420,6 +420,7 @@ header {
   display: flex;
   flex-direction: column;
   gap: 0;
+  flex: 1;
 }
 
 /* Full-width thumbnail at top of card */
@@ -524,6 +525,7 @@ header {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  margin-top: auto;
 }
 
 .job-progress-wrap { width: 100%; }
@@ -562,6 +564,8 @@ header {
   align-items: center;
   justify-content: center;
   font-size: 13px;
+  line-height: 1;
+  padding: 0;
   transition: all .15s;
 }
 
@@ -1220,6 +1224,13 @@ video#mainVideo {
         <button class="chip" data-status="error" onclick="setStatusFilter('error', this)">Error</button>
       </div>
       <div class="filter-chips" id="siteChips"></div>
+      <select class="filter-search" id="sortSelect" onchange="renderJobs()" style="width:auto;padding:7px 10px">
+        <option value="date-desc">Newest first</option>
+        <option value="date-asc">Oldest first</option>
+        <option value="title-asc">Title A–Z</option>
+        <option value="title-desc">Title Z–A</option>
+        <option value="status">By status</option>
+      </select>
     </div>
     <div class="job-list" id="jobList"></div>
   </div>
@@ -1531,7 +1542,18 @@ async function pollJobs() {
 
 // ──────────────────── Render ────────────────────
 function renderJobs() {
-  const list = Object.values(jobs).sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+  const sortVal = document.getElementById('sortSelect')?.value || 'date-desc';
+  const list = Object.values(jobs).sort((a, b) => {
+    if (sortVal === 'date-asc')   return (a.created_at || 0) - (b.created_at || 0);
+    if (sortVal === 'date-desc')  return (b.created_at || 0) - (a.created_at || 0);
+    if (sortVal === 'title-asc')  return (a.title || '').localeCompare(b.title || '');
+    if (sortVal === 'title-desc') return (b.title || '').localeCompare(a.title || '');
+    if (sortVal === 'status') {
+      const order = {downloading:0, queued:1, error:2, done:3};
+      return (order[a.status]||9) - (order[b.status]||9);
+    }
+    return (b.created_at || 0) - (a.created_at || 0);
+  });
   const container = document.getElementById('jobList');
   const empty = document.getElementById('queueEmpty');
   const count = document.getElementById('queueCount');
@@ -1549,26 +1571,23 @@ function renderJobs() {
   updateSiteChips();
   applyFilters();
 
-  // Add new cards / remove deleted ones — never touch existing cards
-  const existing = new Set([...container.children].map(el => el.id));
-  const current  = new Set(list.map(j => 'job-' + j.id));
-
   // Remove cards no longer in jobs
-  for (const id of existing) {
-    if (!current.has(id)) container.querySelector('#' + id)?.remove();
-  }
+  const current = new Set(list.map(j => 'job-' + j.id));
+  [...container.children].forEach(el => { if (!current.has(el.id)) el.remove(); });
 
-  // Insert new cards in sorted order
-  list.forEach((j, idx) => {
-    let card = document.getElementById('job-' + j.id);
-    if (!card) {
-      card = createJobCard(j);
-      // Insert at correct position
-      const ref = container.children[idx];
-      container.insertBefore(card, ref || null);
+  // Create missing cards
+  list.forEach(j => {
+    if (!document.getElementById('job-' + j.id)) {
+      container.appendChild(createJobCard(j));
     }
-    // Always update dynamic parts in-place (no flicker)
-    updateJobCard(card, j);
+    updateJobCard(document.getElementById('job-' + j.id), j);
+  });
+
+  // Reorder DOM to match sorted list (move each card to correct position)
+  list.forEach((j, idx) => {
+    const card = document.getElementById('job-' + j.id);
+    const current = container.children[idx];
+    if (current !== card) container.insertBefore(card, current || null);
   });
 }
 
@@ -1578,7 +1597,7 @@ function createJobCard(j) {
   card.className = 'job-card';
 
   const isDone = j.status === 'done' && j.filepath;
-  const thumbSrc = esc(j.thumbnail);
+  const thumbSrc = esc(thumbUrl(j.thumbnail));
   const thumb = j.thumbnail
     ? `<div style="position:relative;width:100%;height:160px;overflow:hidden;flex-shrink:0"${isDone ? ` onclick="openPlayer('${j.id}')" style="position:relative;width:100%;height:160px;overflow:hidden;flex-shrink:0;cursor:pointer"` : ''}>
         <img src="${thumbSrc}" style="width:100%;height:100%;object-fit:cover;display:block" onerror="this.parentElement.style.display='none'" />
@@ -1888,6 +1907,16 @@ async function openFolderPicker() {
   }
 }
 
+// ──────────────────── Thumbnail proxy ────────────────────
+function thumbUrl(url) {
+  if (!url) return '';
+  // Proxy ytimg and youtube thumbnails through backend to bypass CORS/referrer block
+  if (url.includes('ytimg.com') || url.includes('yt3.gg') || url.includes('i.ytimg')) {
+    return '/api/thumb?url=' + encodeURIComponent(url);
+  }
+  return url;
+}
+
 // ──────────────────── Site colors ────────────────────
 const SITE_COLORS = {
   'YouTube':    { bg: 'rgba(255,0,0,.15)',     color: '#ff4444' },
@@ -2005,7 +2034,7 @@ function renderPlaylist() {
     const j = jobs[id];
     if (!j) return '';
     return `<div class="playlist-item${i === playerIndex ? ' active' : ''}" onclick="loadPlayerTrack(${i})">
-      ${j.thumbnail ? `<img src="${esc(j.thumbnail)}" onerror="this.style.display='none'" />` : ''}
+      ${j.thumbnail ? `<img src="${esc(thumbUrl(j.thumbnail))}" onerror="this.style.display='none'" />` : ''}
       <div class="playlist-item-info">
         <div class="playlist-item-title">${esc(j.title || j.url)}</div>
         <div class="playlist-item-meta">${siteBadgeHtml(j.site, j.url)}</div>
