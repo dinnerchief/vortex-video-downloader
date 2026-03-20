@@ -1,0 +1,1523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VORTEX — Video Downloader</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --bg: #080a0f;
+  --surface: #0d1018;
+  --surface2: #131720;
+  --border: #1e2535;
+  --border2: #2a3347;
+  --accent: #e8ff47;
+  --accent2: #47d4ff;
+  --accent3: #ff4747;
+  --text: #e8ecf4;
+  --text2: #8892a4;
+  --text3: #4a5568;
+  --done: #47ff8a;
+  --warn: #ffb347;
+  --radius: 12px;
+  --radius-sm: 8px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-x: hidden;
+}
+
+/* ── BG GRID ── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(232,255,71,.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(232,255,71,.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  top: -200px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 800px;
+  height: 400px;
+  background: radial-gradient(ellipse, rgba(71,212,255,.07) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── LAYOUT ── */
+.app {
+  position: relative;
+  z-index: 1;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 40px 32px 80px;
+}
+
+/* ── HEADER ── */
+header {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 48px;
+}
+
+.logo {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 72px;
+  line-height: 1;
+  letter-spacing: 4px;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 0 40px rgba(232,255,71,.25));
+}
+
+.tagline {
+  color: var(--text2);
+  font-size: 12px;
+  font-family: 'DM Mono', monospace;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding-bottom: 8px;
+}
+
+.site-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-left: auto;
+  padding-bottom: 10px;
+}
+
+.site-tag {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 1px;
+  padding: 3px 8px;
+  border: 1px solid var(--border2);
+  border-radius: 4px;
+  color: var(--text3);
+  background: var(--surface);
+}
+
+/* ── URL INPUT SECTION ── */
+.input-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  margin-bottom: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.input-section::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), var(--accent2), transparent);
+  opacity: 0.6;
+}
+
+.input-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 12px;
+}
+
+.url-row {
+  display: flex;
+  gap: 10px;
+}
+
+.url-input {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  color: var(--text);
+  font-family: 'DM Mono', monospace;
+  font-size: 13px;
+  outline: none;
+  transition: border-color .2s, box-shadow .2s;
+}
+
+.url-input::placeholder { color: var(--text3); }
+.url-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(232,255,71,.1);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-radius: var(--radius-sm);
+  border: none;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all .15s;
+  white-space: nowrap;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #080a0f;
+  font-weight: 600;
+}
+.btn-primary:hover { background: #f0ff6b; transform: translateY(-1px); }
+.btn-primary:active { transform: translateY(0); }
+
+.btn-secondary {
+  background: var(--surface2);
+  color: var(--text2);
+  border: 1px solid var(--border2);
+}
+.btn-secondary:hover { border-color: var(--text3); color: var(--text); }
+
+.btn-danger {
+  background: transparent;
+  color: var(--accent3);
+  border: 1px solid rgba(255,71,71,.3);
+}
+.btn-danger:hover { background: rgba(255,71,71,.1); }
+
+.btn-cyan {
+  background: rgba(71,212,255,.1);
+  color: var(--accent2);
+  border: 1px solid rgba(71,212,255,.3);
+}
+.btn-cyan:hover { background: rgba(71,212,255,.2); }
+
+.btn:disabled { opacity: .4; pointer-events: none; }
+
+/* ── PREVIEW CARD ── */
+.preview-card {
+  display: none;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-top: 16px;
+  animation: slideDown .25s ease;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.preview-card.visible { display: block; }
+
+.preview-inner {
+  display: flex;
+  gap: 0;
+}
+
+.preview-thumb {
+  width: 200px;
+  min-height: 120px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--bg);
+}
+
+.preview-thumb-placeholder {
+  width: 200px;
+  min-height: 120px;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 40px;
+  color: var(--text3);
+}
+
+.preview-meta {
+  padding: 16px 20px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.preview-title {
+  font-weight: 500;
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+.preview-sub {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--text3);
+  display: flex;
+  gap: 14px;
+}
+
+.quality-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 8px;
+}
+
+.quality-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--text3);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.quality-select {
+  background: var(--bg);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  padding: 6px 10px;
+  color: var(--text);
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  outline: none;
+  cursor: pointer;
+}
+
+.quality-select:focus { border-color: var(--accent); }
+
+/* ── PLAYLIST PREVIEW ── */
+.playlist-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.playlist-icon {
+  width: 36px; height: 36px;
+  background: rgba(232,255,71,.1);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+}
+
+.playlist-info { flex: 1; }
+.playlist-title { font-weight: 500; font-size: 14px; }
+.playlist-count { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text3); }
+
+/* ── QUEUE ── */
+.queue-section {
+  margin-top: 32px;
+}
+
+.queue-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.queue-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 28px;
+  letter-spacing: 2px;
+  color: var(--text2);
+}
+
+.queue-count {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  background: rgba(232,255,71,.1);
+  color: var(--accent);
+  border: 1px solid rgba(232,255,71,.2);
+  padding: 2px 8px;
+  border-radius: 20px;
+}
+
+.queue-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+
+.queue-empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text3);
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+
+.queue-empty-icon { font-size: 40px; margin-bottom: 12px; opacity: .4; }
+
+/* ── JOB CARD ── */
+.job-list {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+@media (max-width: 1100px) { .job-list { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 750px)  { .job-list { grid-template-columns: repeat(2, 1fr); } }
+
+.job-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: border-color .2s, transform .15s;
+  animation: slideDown .2s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.job-card:hover { border-color: var(--border2); transform: translateY(-2px); }
+.job-card.status-done { border-color: rgba(71,255,138,.25); }
+.job-card.status-error { border-color: rgba(255,71,71,.25); }
+.job-card.status-downloading { border-color: rgba(71,212,255,.25); }
+
+.job-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* Full-width thumbnail at top of card */
+.job-thumb-wrap {
+  position: relative;
+  width: 100%;
+  height: 160px;
+  flex-shrink: 0;
+  cursor: zoom-in;
+}
+.job-thumb-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: filter .2s;
+}
+.job-thumb-wrap:hover img { filter: brightness(0.45); }
+.job-thumb-wrap .mag {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  opacity: 0;
+  transition: opacity .2s;
+  pointer-events: none;
+}
+.job-thumb-wrap:hover .mag {
+  opacity: 1;
+  animation: magPop .25s cubic-bezier(.175,.885,.32,1.275) forwards;
+}
+
+.job-thumb-placeholder {
+  width: 100%;
+  height: 160px;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  color: var(--text3);
+}
+
+.job-body {
+  padding: 10px 12px 8px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.job-info { min-width: 0; }
+
+.job-title {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-bottom: 5px;
+}
+
+.job-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--text3);
+}
+
+.job-meta-right {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  font-size: 10px;
+}
+
+.status-badge {
+  padding: 2px 7px;
+  border-radius: 20px;
+  font-size: 9px;
+  font-family: 'DM Mono', monospace;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.badge-queued      { background: rgba(100,100,100,.2); color: var(--text3); }
+.badge-downloading { background: rgba(71,212,255,.15); color: var(--accent2); }
+.badge-done        { background: rgba(71,255,138,.15); color: var(--done); }
+.badge-error       { background: rgba(255,71,71,.15);  color: var(--accent3); }
+
+.job-footer {
+  padding: 0 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.job-progress-wrap { width: 100%; }
+
+.progress-bar-bg {
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent2), var(--accent));
+  border-radius: 2px;
+  transition: width .3s ease;
+}
+
+.progress-bar-fill.done  { background: var(--done); }
+.progress-bar-fill.error { background: var(--accent3); }
+
+.job-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.icon-btn {
+  width: 28px; height: 28px;
+  border-radius: 7px;
+  border: 1px solid var(--border2);
+  background: transparent;
+  color: var(--text3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  transition: all .15s;
+}
+
+.icon-btn:hover { border-color: var(--text2); color: var(--text); }
+.icon-btn.dl { border-color: rgba(71,255,138,.3); color: var(--done); }
+.icon-btn.dl:hover { background: rgba(71,255,138,.1); }
+.icon-btn.start { border-color: rgba(232,255,71,.3); color: var(--accent); }
+.icon-btn.start:hover { background: rgba(232,255,71,.1); }
+.icon-btn.del:hover { border-color: rgba(255,71,71,.4); color: var(--accent3); background: rgba(255,71,71,.08); }
+.icon-btn.reveal { border-color: rgba(71,212,255,.3); color: var(--accent2); }
+.icon-btn.reveal:hover { background: rgba(71,212,255,.1); }
+
+/* ── TOAST ── */
+.toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 999;
+}
+
+.toast {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  font-size: 13px;
+  max-width: 300px;
+  animation: toastIn .25s ease;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.toast.success { border-color: rgba(71,255,138,.3); }
+.toast.error   { border-color: rgba(255,71,71,.3); }
+.toast.info    { border-color: rgba(71,212,255,.3); }
+
+/* ── LOADING SPINNER ── */
+.spinner {
+  width: 16px; height: 16px;
+  border: 2px solid var(--border2);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── FOLDER PICKER ── */
+.folder-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+  align-items: center;
+}
+
+.folder-display {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  color: var(--text2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: default;
+}
+
+.folder-display .folder-icon { margin-right: 8px; }
+
+.folder-modal-bg {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.7);
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+}
+.folder-modal-bg.open { display: flex; }
+
+.folder-modal {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  width: 480px;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideDown .2s ease;
+}
+
+.folder-modal-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.folder-modal-header .title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 20px;
+  letter-spacing: 2px;
+  flex: 1;
+}
+
+.folder-breadcrumb {
+  padding: 10px 16px;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--text3);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.folder-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.folder-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background .1s;
+}
+.folder-item:hover { background: var(--surface2); }
+.folder-item .fi-icon { font-size: 16px; flex-shrink: 0; }
+.folder-item .fi-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.folder-item .fi-arrow { color: var(--text3); font-size: 12px; }
+
+.folder-item.up { color: var(--text3); }
+
+.folder-modal-footer {
+  padding: 14px 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.folder-selected-path {
+  flex: 1;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--accent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── FILTER BAR ── */
+.filter-bar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.filter-search {
+  background: var(--bg);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  color: var(--text);
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  outline: none;
+  width: 220px;
+  transition: border-color .2s;
+}
+.filter-search::placeholder { color: var(--text3); }
+.filter-search:focus { border-color: var(--accent); }
+
+.filter-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.chip {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: .5px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid var(--border2);
+  background: transparent;
+  color: var(--text3);
+  cursor: pointer;
+  transition: all .15s;
+  text-transform: uppercase;
+}
+.chip:hover { border-color: var(--text2); color: var(--text); }
+.chip.active { background: var(--accent); color: #080a0f; border-color: var(--accent); font-weight: 600; }
+.chip.site-chip.active { border-color: transparent; }
+
+/* ── SITE BADGES ── */
+.site-badge {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  letter-spacing: .5px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+/* ── LIGHTBOX ── */
+.lightbox-bg {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0);
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
+  cursor: zoom-out;
+  transition: background .25s ease;
+}
+.lightbox-bg.open { display: flex; }
+.lightbox-bg.visible { background: rgba(0,0,0,.88); }
+
+.lightbox-bg img {
+  max-width: 90vw;
+  max-height: 90vh;
+  border-radius: var(--radius);
+  box-shadow: 0 0 80px rgba(0,0,0,.9);
+  cursor: default;
+  transform: scale(0.4);
+  opacity: 0;
+  transition: transform .3s cubic-bezier(.175,.885,.32,1.275), opacity .2s ease;
+}
+.lightbox-bg.visible img {
+  transform: scale(1);
+  opacity: 1;
+}
+
+
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- HEADER -->
+  <header>
+    <div>
+      <div class="logo">VORTEX</div>
+      <div class="tagline">// video downloader engine</div>
+    </div>
+    <div class="site-tags">
+      <span class="site-tag">YOUTUBE</span>
+      <span class="site-tag">VIMEO</span>
+      <span class="site-tag">TWITTER/X</span>
+      <span class="site-tag">INSTAGRAM</span>
+      <span class="site-tag">TIKTOK</span>
+      <span class="site-tag">+1000 MORE</span>
+    </div>
+  </header>
+
+  <!-- URL INPUT -->
+  <div class="input-section">
+    <div class="input-label">// paste video url</div>
+    <div class="url-row">
+      <input
+        class="url-input"
+        id="urlInput"
+        type="text"
+        placeholder="https://www.youtube.com/watch?v=..."
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <button class="btn btn-primary" id="fetchBtn" onclick="handleFetch()">
+        <span id="fetchBtnIcon">⚡</span> Fetch
+      </button>
+    </div>
+
+    <div class="folder-row">
+      <div class="folder-display" id="folderDisplay">
+        <span class="folder-icon">📁</span><span id="folderPath">Loading...</span>
+      </div>
+      <button class="btn btn-secondary" id="browseBtn" onclick="openFolderPicker()">Browse</button>
+    </div>
+    <div class="url-row" style="margin-top:10px">
+      <input
+        class="url-input"
+        id="proxyInput"
+        type="text"
+        placeholder="Proxy (optional) — e.g. http://127.0.0.1:2090 or socks5://127.0.0.1:1080"
+        autocomplete="off"
+        spellcheck="false"
+        onchange="saveProxy()"
+        style="font-size:12px;color:var(--text2)"
+      />
+    </div>
+  </div>
+  <!-- QUEUE -->
+  <div class="queue-section">
+    <div class="queue-header">
+      <div class="queue-title">QUEUE</div>
+      <div class="queue-count" id="queueCount">0</div>
+      <div class="queue-actions">
+
+        <button class="btn btn-secondary" onclick="clearDone()">Clear Done</button>
+        <button class="btn btn-danger" onclick="clearAll()">Clear All</button>
+      </div>
+    </div>
+
+    <div class="queue-empty" id="queueEmpty">
+      <div class="queue-empty-icon">📭</div>
+      <div>NO VIDEOS IN QUEUE</div>
+      <div style="margin-top:6px;opacity:.6">paste a url above to get started</div>
+    </div>
+
+    <div class="filter-bar" id="filterBar" style="display:none">
+      <input class="filter-search" id="filterSearch" placeholder="🔍 Search titles..." oninput="applyFilters()" />
+      <div class="filter-chips" id="filterChips">
+        <button class="chip active" data-status="all" onclick="setStatusFilter('all', this)">All</button>
+        <button class="chip" data-status="queued" onclick="setStatusFilter('queued', this)">Queued</button>
+        <button class="chip" data-status="downloading" onclick="setStatusFilter('downloading', this)">Downloading</button>
+        <button class="chip" data-status="done" onclick="setStatusFilter('done', this)">Done</button>
+        <button class="chip" data-status="error" onclick="setStatusFilter('error', this)">Error</button>
+      </div>
+      <div class="filter-chips" id="siteChips"></div>
+    </div>
+    <div class="job-list" id="jobList"></div>
+  </div>
+</div>
+
+<!-- LIGHTBOX -->
+<div class="lightbox-bg" id="lightboxBg" onclick="closeLightbox()">
+  <img id="lightboxImg" src="" onclick="event.stopPropagation()" />
+</div>
+
+<!-- TOASTS -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ──────────────────── State ────────────────────
+let currentPreview = null;
+let jobs = {};         // job_id → job obj
+let pollTimer = null;
+
+// ──────────────────── Fetch info ────────────────────
+async function handleFetch() {
+  const url = document.getElementById('urlInput').value.trim();
+  if (!url) { toast('Paste a URL first', 'error'); return; }
+
+  const btn = document.getElementById('fetchBtn');
+  const icon = document.getElementById('fetchBtnIcon');
+  btn.disabled = true;
+  icon.innerHTML = '<span class="spinner" style="display:inline-block;vertical-align:middle;margin:-2px 4px 0 0"></span>';
+
+  try {
+    const res = await fetch('/api/info', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || 'Failed to fetch info');
+
+    if (data.type === 'playlist') {
+      const entries = data.entries || [];
+      toast(`Queuing ${entries.length} videos...`, 'info');
+      for (const e of entries) {
+        await startDownload(e.url, e.title, e.thumbnail, 'best');
+        await sleep(100);
+      }
+    } else {
+      const quality = (data.quality_options || ['best'])[0];
+      await startDownload(url, data.title, data.thumbnail, quality);
+    }
+
+    document.getElementById('urlInput').value = '';
+  } catch (e) {
+    toast('Error: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    icon.textContent = '⚡';
+  }
+}
+
+document.getElementById('urlInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') handleFetch();
+});
+
+function hidePreview() {
+  const card = document.getElementById('previewCard');
+  card.classList.remove('visible');
+  card.innerHTML = '';
+}
+
+function formatDuration(s) {
+  if (!s) return '';
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h) return `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+  return `${m}:${String(sec).padStart(2,'0')}`;
+}
+
+function formatViews(n) {
+  if (!n) return '';
+  if (n >= 1e6) return (n/1e6).toFixed(1) + 'M views';
+  if (n >= 1e3) return (n/1e3).toFixed(1) + 'K views';
+  return n + ' views';
+}
+
+function showPreview(data, url) {
+  const card = document.getElementById('previewCard');
+
+  if (data.type === 'playlist') {
+    card.innerHTML = `
+      <div class="playlist-header">
+        <div class="playlist-icon">🎵</div>
+        <div class="playlist-info">
+          <div class="playlist-title">${esc(data.title)}</div>
+          <div class="playlist-count">${data.count} videos in playlist</div>
+        </div>
+        <button class="btn btn-primary" onclick="queueAll()">⬇ Queue All</button>
+      </div>
+    `;
+  } else {
+    const thumbHtml = data.thumbnail
+      ? `<img class="preview-thumb" src="${esc(data.thumbnail)}" onerror="this.style.display='none'" />`
+      : `<div class="preview-thumb-placeholder">🎬</div>`;
+
+    const qualityOptions = (data.quality_options || ['best'])
+      .map(q => `<option value="${esc(q)}">${q}</option>`)
+      .join('');
+
+    card.innerHTML = `
+      <div class="preview-inner">
+        ${thumbHtml}
+        <div class="preview-meta">
+          <div class="preview-title">${esc(data.title)}</div>
+          <div class="preview-sub">
+            ${data.uploader ? `<span>👤 ${esc(data.uploader)}</span>` : ''}
+            ${data.duration ? `<span>⏱ ${formatDuration(data.duration)}</span>` : ''}
+            ${data.view_count ? `<span>👁 ${formatViews(data.view_count)}</span>` : ''}
+            ${data.extractor ? `<span>🔗 ${esc(data.extractor)}</span>` : ''}
+          </div>
+          <div class="quality-row">
+            <span class="quality-label">Quality</span>
+            <select class="quality-select" id="qualitySelect">
+              ${qualityOptions}
+            </select>
+            <button class="btn btn-primary" onclick="queueSingle()" style="margin-left:auto">
+              + Add to Queue
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  card.classList.add('visible');
+}
+
+// ──────────────────── Queue actions ────────────────────
+async function queueSingle() {
+  if (!currentPreview) return;
+  const quality = document.getElementById('qualitySelect')?.value || 'best';
+  await startDownload(currentPreview.url, currentPreview.title, currentPreview.thumbnail, quality);
+  hidePreview();
+  document.getElementById('urlInput').value = '';
+  currentPreview = null;
+}
+
+async function queueAll() {
+  if (!currentPreview || currentPreview.type !== 'playlist') return;
+  const entries = currentPreview.entries || [];
+  if (!entries.length) { toast('No entries found in playlist', 'error'); return; }
+
+  toast(`Queuing ${entries.length} videos...`, 'info');
+  for (const e of entries) {
+    await startDownload(e.url, e.title, e.thumbnail, 'best');
+    await sleep(100);
+  }
+  hidePreview();
+  document.getElementById('urlInput').value = '';
+  currentPreview = null;
+}
+
+async function startDownload(url, title, thumbnail, quality) {
+  const res = await fetch('/api/download', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url, title, thumbnail, quality }),
+  });
+  const data = await res.json();
+  if (data.error) { toast('Error: ' + data.error, 'error'); return; }
+
+  // Optimistic add
+  jobs[data.job_id] = {
+    id: data.job_id, title, thumbnail, quality,
+    status: 'queued', progress: 0, speed: '', eta: '',
+    filename: '', filepath: '', error: '', url,
+  };
+  renderJobs();
+  toast(`Added: ${title.slice(0,40)}...`, 'success');
+  startPolling();
+}
+
+async function downloadAll() {
+  const done = Object.values(jobs).filter(j => j.status === 'done');
+  if (!done.length) { toast('No completed downloads', 'info'); return; }
+  for (const j of done) {
+    triggerFileDownload(j.id);
+    await sleep(400);
+  }
+}
+
+async function startJob(jobId) {
+  const res = await fetch(`/api/start/${jobId}`, { method: 'POST' });
+  const data = await res.json();
+  if (data.error) { toast('Error: ' + data.error, 'error'); return; }
+  if (jobs[jobId]) jobs[jobId].status = 'downloading';
+  renderJobs();
+  startPolling();
+}
+
+function triggerFileDownload(jobId) {
+  const a = document.createElement('a');
+  a.href = `/api/file/${jobId}`;
+  a.download = '';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+async function deleteJob(jobId) {
+  await fetch(`/api/delete/${jobId}`, { method: 'DELETE' });
+  delete jobs[jobId];
+  renderJobs();
+}
+
+async function clearDone() {
+  await fetch('/api/clear', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'done' }) });
+  for (const id of Object.keys(jobs)) {
+    if (jobs[id].status === 'done' || jobs[id].status === 'error') delete jobs[id];
+  }
+  renderJobs();
+}
+
+async function clearAll() {
+  await fetch('/api/clear', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'all' }) });
+  jobs = {};
+  renderJobs();
+}
+
+// ──────────────────── Polling ────────────────────
+function startPolling() {
+  if (pollTimer) return;
+  pollTimer = setInterval(pollJobs, 800);
+}
+
+async function pollJobs() {
+  const active = Object.values(jobs).filter(j => j.status === 'queued' || j.status === 'downloading');
+  if (!active.length) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+    return;
+  }
+  try {
+    const res = await fetch('/api/jobs');
+    const list = await res.json();
+    for (const j of list) {
+      jobs[j.id] = j;
+    }
+    renderJobs();
+  } catch {}
+}
+
+// ──────────────────── Render ────────────────────
+function renderJobs() {
+  const list = Object.values(jobs).sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+  const container = document.getElementById('jobList');
+  const empty = document.getElementById('queueEmpty');
+  const count = document.getElementById('queueCount');
+
+  count.textContent = list.length;
+  empty.style.display = list.length ? 'none' : 'block';
+  container.style.display = list.length ? 'grid' : 'none';
+
+
+
+  // Show/hide filter bar
+  const filterBar = document.getElementById('filterBar');
+  if (filterBar) filterBar.style.display = list.length ? 'flex' : 'none';
+
+  updateSiteChips();
+  applyFilters();
+
+  // Add new cards / remove deleted ones — never touch existing cards
+  const existing = new Set([...container.children].map(el => el.id));
+  const current  = new Set(list.map(j => 'job-' + j.id));
+
+  // Remove cards no longer in jobs
+  for (const id of existing) {
+    if (!current.has(id)) container.querySelector('#' + id)?.remove();
+  }
+
+  // Insert new cards in sorted order
+  list.forEach((j, idx) => {
+    let card = document.getElementById('job-' + j.id);
+    if (!card) {
+      card = createJobCard(j);
+      // Insert at correct position
+      const ref = container.children[idx];
+      container.insertBefore(card, ref || null);
+    }
+    // Always update dynamic parts in-place (no flicker)
+    updateJobCard(card, j);
+  });
+}
+
+function createJobCard(j) {
+  const card = document.createElement('div');
+  card.id = 'job-' + j.id;
+  card.className = 'job-card';
+
+  const thumb = j.thumbnail
+    ? `<div class="job-thumb-wrap" onclick="openLightbox('${esc(j.thumbnail)}')">
+        <img src="${esc(j.thumbnail)}" onerror="this.parentElement.style.display='none'" />
+        <div class="mag">🔍</div>
+       </div>`
+    : `<div class="job-thumb-placeholder">🎬</div>`;
+
+  card.innerHTML = `
+    <div class="job-inner">
+      ${thumb}
+      <div class="job-body">
+        <div class="job-info">
+          <div class="job-title">${esc(j.title || j.url)}</div>
+          <div class="job-meta">
+            <span class="job-site">${siteBadgeHtml(j.site, j.url)}</span>
+            <span class="job-badge"></span>
+            <span class="job-meta-right"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="job-footer">
+      <div class="job-progress-wrap" style="display:none">
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill"></div>
+        </div>
+      </div>
+      <div class="job-actions">
+        <span class="job-action-slot"></span>
+        <span class="job-reveal-slot"></span>
+        <button class="icon-btn del" title="Remove" onclick="deleteJob('${j.id}')">✕</button>
+      </div>
+    </div>`;
+  return card;
+}
+
+function updateJobCard(card, j) {
+  card.className = `job-card status-${j.status}`;
+
+  const badge = card.querySelector('.job-badge');
+  if (badge) {
+    badge.className = `status-badge badge-${j.status} job-badge`;
+    badge.textContent = j.status;
+  }
+
+  const metaRight = card.querySelector('.job-meta-right');
+  if (metaRight) {
+    if (j.status === 'downloading') {
+      const speedHtml = j.speed ? `<span style="color:var(--accent);font-weight:500">${esc(j.speed)}</span>` : '';
+      const etaHtml   = j.eta   ? `<span style="color:var(--text2)">ETA <span style="color:var(--accent2)">${esc(j.eta)}</span></span>` : '';
+      const sep = speedHtml && etaHtml ? '<span style="color:var(--border2);padding:0 6px">|</span>' : '';
+      metaRight.innerHTML = speedHtml + sep + etaHtml;
+    } else if (j.status === 'error') {
+      metaRight.innerHTML = `<span style="color:var(--accent3)">${esc((j.error||'').slice(0,60))}</span>`;
+    } else {
+      metaRight.textContent = j.quality || '';
+    }
+  }
+
+  const actionSlot = card.querySelector('.job-action-slot');
+  if (actionSlot) {
+    if (j.status === 'queued' || j.status === 'error') {
+      if (!actionSlot.querySelector('.start')) {
+        actionSlot.innerHTML = `<button class="icon-btn start" title="Start download" onclick="startJob('${j.id}')">▶</button>`;
+      }
+    } else {
+      actionSlot.innerHTML = '';
+    }
+  }
+
+  const revealSlot = card.querySelector('.job-reveal-slot');
+  if (revealSlot) {
+    if (j.status === 'done' && j.filepath) {
+      if (!revealSlot.querySelector('.reveal')) {
+        revealSlot.innerHTML = `<button class="icon-btn reveal" title="Show in Explorer" onclick="revealInExplorer('${j.id}')">📂</button>`;
+      }
+    } else {
+      revealSlot.innerHTML = '';
+    }
+  }
+
+  const progressWrap = card.querySelector('.job-progress-wrap');
+  const progressFill = card.querySelector('.progress-bar-fill');
+  if (progressWrap && progressFill) {
+    const show = j.status === 'downloading' || j.status === 'done' || j.status === 'error';
+    progressWrap.style.display = show ? 'block' : 'none';
+    progressFill.style.width = (j.progress || 0) + '%';
+    progressFill.className = 'progress-bar-fill' +
+      (j.status === 'done' ? ' done' : j.status === 'error' ? ' error' : '');
+  }
+  // Show progress pct in meta when downloading
+  const pctSpan = card.querySelector('.job-pct');
+  if (j.status === 'downloading' && j.progress > 0) {
+    if (!pctSpan) {
+      const badge = card.querySelector('.job-badge');
+      if (badge) {
+        const span = document.createElement('span');
+        span.className = 'job-pct';
+        span.style.cssText = 'font-family:DM Mono,monospace;font-size:10px;color:var(--accent2)';
+        badge.parentElement.appendChild(span);
+      }
+    }
+    if (card.querySelector('.job-pct')) card.querySelector('.job-pct').textContent = j.progress + '%';
+  } else if (pctSpan) {
+    pctSpan.remove();
+  }
+}
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ──────────────────── Toasts ────────────────────
+function toast(msg, type = 'info') {
+  const icons = { success: '✅', error: '❌', info: 'ℹ️' };
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `<span>${icons[type]||'ℹ️'}</span><span>${esc(msg)}</span>`;
+  document.getElementById('toastContainer').appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ──────────────────── Filters ────────────────────
+let activeStatus = 'all';
+let activeSite = null;
+
+function setStatusFilter(status, el) {
+  activeStatus = status;
+  document.querySelectorAll('#filterChips .chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  applyFilters();
+}
+
+function setSiteFilter(site, el) {
+  if (activeSite === site) {
+    activeSite = null;
+    el.classList.remove('active');
+  } else {
+    activeSite = site;
+    document.querySelectorAll('#siteChips .chip').forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+  }
+  applyFilters();
+}
+
+function applyFilters() {
+  const query = (document.getElementById('filterSearch')?.value || '').toLowerCase();
+  document.querySelectorAll('.job-card').forEach(card => {
+    const id = card.id.replace('job-', '');
+    const j = jobs[id];
+    if (!j) return;
+
+    const matchStatus = activeStatus === 'all' || j.status === activeStatus;
+    const resolvedSite = j.site || detectSiteFromUrl(j.url);
+    const matchSite = !activeSite || resolvedSite === activeSite;
+    const matchSearch = !query || (j.title || j.url || '').toLowerCase().includes(query);
+
+    card.style.display = (matchStatus && matchSite && matchSearch) ? '' : 'none';
+  });
+}
+
+function updateSiteChips() {
+  const sites = {};
+  for (const j of Object.values(jobs)) {
+    const s = j.site || detectSiteFromUrl(j.url) || 'Other';
+    sites[s] = (sites[s] || 0) + 1;
+  }
+  const container = document.getElementById('siteChips');
+  if (!container) return;
+  container.innerHTML = Object.entries(sites)
+    .sort((a, b) => b[1] - a[1])
+    .map(([site, count]) => {
+      const sc = SITE_COLORS[site];
+      const activeStyle = activeSite === site && sc
+        ? `background:${sc.bg};color:${sc.color};border-color:${sc.color}`
+        : '';
+      return `<button class="chip site-chip${activeSite === site ? ' active' : ''}"
+        style="${activeStyle}"
+        onclick="setSiteFilter('${esc(site)}', this)">${esc(site)} <span style="opacity:.6">${count}</span></button>`;
+    }).join('');
+}
+
+// ──────────────────── Folder Picker ────────────────────
+async function loadFolder() {
+  const res = await fetch('/api/folder');
+  const data = await res.json();
+  document.getElementById('folderPath').textContent = data.folder;
+}
+
+async function openFolderPicker() {
+  const btn = document.getElementById('browseBtn');
+  btn.disabled = true;
+  btn.textContent = 'Picking...';
+  try {
+    const res = await fetch('/api/folder/pick');
+    const data = await res.json();
+    if (data.error) { toast('Error: ' + data.error, 'error'); return; }
+    if (!data.path) return; // user cancelled
+    const res2 = await fetch('/api/folder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folder: data.path }),
+    });
+    const data2 = await res2.json();
+    if (data2.error) { toast('Error: ' + data2.error, 'error'); return; }
+    document.getElementById('folderPath').textContent = data2.folder;
+    toast('Download folder set', 'success');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Browse';
+  }
+}
+
+// ──────────────────── Site colors ────────────────────
+const SITE_COLORS = {
+  'YouTube':    { bg: 'rgba(255,0,0,.15)',     color: '#ff4444' },
+  'PornHub':    { bg: 'rgba(255,149,0,.15)',   color: '#ff9500' },
+  'Vimeo':      { bg: 'rgba(26,183,234,.15)',  color: '#1ab7ea' },
+  'Twitter':    { bg: 'rgba(29,161,242,.15)',  color: '#1da1f2' },
+  'Instagram':  { bg: 'rgba(225,48,108,.15)',  color: '#e1306c' },
+  'TikTok':     { bg: 'rgba(254,44,85,.15)',   color: '#fe2c55' },
+  'Twitch':     { bg: 'rgba(145,71,255,.15)',  color: '#9147ff' },
+  'Reddit':     { bg: 'rgba(255,69,0,.15)',    color: '#ff4500' },
+  'XVideos':    { bg: 'rgba(255,0,0,.15)',     color: '#ff2020' },
+  'xHamster':   { bg: 'rgba(255,102,0,.15)',   color: '#ff6600' },
+  'XNXX':       { bg: 'rgba(255,50,50,.15)',   color: '#ff3232' },
+  'SpankBang':  { bg: 'rgba(255,80,0,.15)',    color: '#ff5000' },
+  'Bilibili':   { bg: 'rgba(0,161,214,.15)',   color: '#00a1d6' },
+  'Dailymotion':{ bg: 'rgba(0,120,220,.15)',   color: '#0078dc' },
+  'Rumble':     { bg: 'rgba(133,195,0,.15)',   color: '#85c300' },
+};
+
+const SITE_URL_MAP = {
+  'pornhub': 'PornHub', 'youtube': 'YouTube', 'youtu.be': 'YouTube',
+  'vimeo': 'Vimeo', 'twitter': 'Twitter', 'x.com': 'Twitter',
+  'instagram': 'Instagram', 'tiktok': 'TikTok', 'twitch': 'Twitch',
+  'reddit': 'Reddit', 'xvideos': 'XVideos', 'xhamster': 'xHamster',
+  'xnxx': 'XNXX', 'rule34': 'Rule34', 'spankbang': 'SpankBang',
+  'eporner': 'EPorner', 'redtube': 'RedTube', 'youporn': 'YouPorn',
+  'bilibili': 'Bilibili', 'dailymotion': 'Dailymotion', 'rumble': 'Rumble',
+};
+
+function detectSiteFromUrl(url) {
+  const u = (url || '').toLowerCase();
+  for (const [key, name] of Object.entries(SITE_URL_MAP)) {
+    if (u.includes(key)) return name;
+  }
+  return null;
+}
+
+function siteBadgeHtml(site, url) {
+  const resolved = site || detectSiteFromUrl(url);
+  if (!resolved) return '';
+  const s = SITE_COLORS[resolved] || { bg: 'rgba(100,100,100,.2)', color: 'var(--text3)' };
+  return `<span class="site-badge" style="background:${s.bg};color:${s.color}">${esc(resolved)}</span>`;
+}
+
+async function revealInExplorer(jobId) {
+  const res = await fetch(`/api/reveal/${jobId}`, { method: 'POST' });
+  const data = await res.json();
+  if (data.error) toast('Error: ' + data.error, 'error');
+}
+
+// ──────────────────── Lightbox ────────────────────
+function openLightbox(src) {
+  const bg = document.getElementById('lightboxBg');
+  const img = document.getElementById('lightboxImg');
+  img.src = src;
+  bg.classList.add('open');
+  requestAnimationFrame(() => requestAnimationFrame(() => bg.classList.add('visible')));
+}
+function closeLightbox() {
+  const bg = document.getElementById('lightboxBg');
+  bg.classList.remove('visible');
+  setTimeout(() => {
+    bg.classList.remove('open');
+    document.getElementById('lightboxImg').src = '';
+  }, 250);
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+
+// ──────────────────── Init ────────────────────
+async function loadProxy() {
+  const res = await fetch('/api/proxy');
+  const data = await res.json();
+  if (data.proxy) document.getElementById('proxyInput').value = data.proxy;
+}
+
+async function saveProxy() {
+  const proxy = document.getElementById('proxyInput').value.trim();
+  await fetch('/api/proxy', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ proxy }),
+  });
+  toast(proxy ? 'Proxy saved: ' + proxy : 'Proxy cleared', 'info');
+}
+
+loadFolder();
+loadProxy();
+
+// Restore jobs from server on page load
+(async () => {
+  try {
+    const res = await fetch('/api/jobs');
+    const list = await res.json();
+    for (const j of list) jobs[j.id] = j;
+    renderJobs();
+    // resume polling if anything is active
+    if (list.some(j => j.status === 'queued' || j.status === 'downloading')) startPolling();
+  } catch {}
+})();
+</script>
+</body>
+</html>
