@@ -439,6 +439,36 @@ def api_stream(job_id):
         return jsonify({'error': 'File not found'}), 404
     return send_file(fp, conditional=True)
 
+@app.route('/api/redownload/<job_id>', methods=['POST'])
+def api_redownload(job_id):
+    job = get_job(job_id)
+    if not job:
+        return jsonify({'error': 'Not found'}), 404
+    # Reset job so it can be restarted — use current USER_DOWNLOAD_DIR
+    update_job(job_id,
+        status='queued',
+        progress=0,
+        speed='',
+        eta='',
+        filename='',
+        filepath='',
+        error='',
+    )
+    save_state()
+    return jsonify({'ok': True})
+
+@app.route('/api/check_files', methods=['POST'])
+def api_check_files():
+    """Return list of done job ids whose files are missing from disk."""
+    missing = []
+    with jobs_lock:
+        for job in jobs.values():
+            if job.get('status') == 'done':
+                fp = job.get('filepath', '')
+                if not fp or not os.path.exists(fp):
+                    missing.append(job['id'])
+    return jsonify({'missing': missing})
+
 @app.route('/api/reveal/<job_id>', methods=['POST'])
 def api_reveal(job_id):
     """Open the file's folder in Windows Explorer with the file selected."""

@@ -405,6 +405,15 @@ header {
 .job-card:hover { border-color: var(--border2); transform: translateY(-2px); }
 .job-card.status-done { border-color: rgba(71,255,138,.25); }
 .job-card.status-error { border-color: rgba(255,71,71,.25); }
+.job-card.file-missing {
+  border: 2px solid rgba(255,60,60,.9) !important;
+  box-shadow: 0 0 12px rgba(255,40,40,.45), 0 0 28px rgba(255,40,40,.2), inset 0 0 20px rgba(255,40,40,.05) !important;
+  animation: missingPulse 2.5s ease-in-out infinite !important;
+}
+@keyframes missingPulse {
+  0%, 100% { box-shadow: 0 0 10px rgba(255,40,40,.4), 0 0 24px rgba(255,40,40,.18), inset 0 0 18px rgba(255,40,40,.05); }
+  50%       { box-shadow: 0 0 18px rgba(255,40,40,.7), 0 0 40px rgba(255,40,40,.32), inset 0 0 28px rgba(255,40,40,.09); }
+}
 .job-card.status-downloading { border-color: rgba(71,212,255,.25); }
 
 .job-inner {
@@ -564,6 +573,20 @@ header {
 .icon-btn.del:hover { border-color: rgba(255,71,71,.4); color: var(--accent3); background: rgba(255,71,71,.08); }
 .icon-btn.reveal { border-color: rgba(71,212,255,.3); color: var(--accent2); }
 .icon-btn.reveal:hover { background: rgba(71,212,255,.1); }
+.icon-btn.redownload {
+  border-color: rgba(255,50,50,.7);
+  color: #ff3232;
+  box-shadow: 0 0 8px rgba(255,50,50,.35);
+  animation: redownloadGlow 2.5s ease-in-out infinite;
+}
+.icon-btn.redownload:hover {
+  background: rgba(255,50,50,.15);
+  box-shadow: 0 0 14px rgba(255,50,50,.6);
+}
+@keyframes redownloadGlow {
+  0%, 100% { box-shadow: 0 0 6px rgba(255,50,50,.3); }
+  50%       { box-shadow: 0 0 14px rgba(255,50,50,.65); }
+}
 
 /* ── TOAST ── */
 .toast-container {
@@ -1015,6 +1038,65 @@ video#mainVideo {
 }
 .speed-select:focus { border-color: var(--accent); }
 
+/* ── THUMB IMAGE BUTTON ── */
+.thumb-img-btn {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  background: rgba(8,10,15,.65);
+  border: 1px solid rgba(255,255,255,.2);
+  color: rgba(255,255,255,.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .15s, background .15s;
+  backdrop-filter: blur(4px);
+  z-index: 10;
+  padding: 0;
+}
+.job-card:hover .thumb-img-btn { opacity: 1; }
+.play-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0);
+  transition: background .2s;
+  pointer-events: none;
+}
+.job-card:hover .play-overlay { background: rgba(0,0,0,.35); }
+.play-overlay-btn {
+  width: 52px; height: 52px;
+  border-radius: 50%;
+  background: rgba(232,255,71,.15);
+  border: 2px solid rgba(232,255,71,.7);
+  color: var(--accent);
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-left: 3px;
+  opacity: 0;
+  transform: scale(0.7);
+  transition: opacity .2s, transform .2s cubic-bezier(.175,.885,.32,1.275);
+  backdrop-filter: blur(4px);
+}
+.job-card:hover .play-overlay-btn {
+  opacity: 1;
+  transform: scale(1);
+}
+.thumb-img-btn:hover {
+  background: rgba(232,255,71,.3);
+  border-color: rgba(232,255,71,.7);
+  color: var(--accent);
+}
+
 /* ── LIGHTBOX ── */
 .lightbox-bg {
   display: none;
@@ -1115,6 +1197,8 @@ video#mainVideo {
       <div class="queue-count" id="queueCount">0</div>
       <div class="queue-actions">
 
+        <button class="btn btn-cyan" onclick="startAll()">▶ Start All</button>
+        <button class="btn btn-secondary" id="redownloadMissingBtn" onclick="redownloadAllMissing()" style="display:none">↺ Redownload Missing</button>
         <button class="btn btn-secondary" onclick="clearDone()">Clear Done</button>
         <button class="btn btn-danger" onclick="clearAll()">Clear All</button>
       </div>
@@ -1194,7 +1278,14 @@ video#mainVideo {
 
 <!-- LIGHTBOX -->
 <div class="lightbox-bg" id="lightboxBg" onclick="closeLightbox()">
-  <img id="lightboxImg" src="" onclick="event.stopPropagation()" />
+  <div style="display:flex;flex-direction:column;align-items:center;gap:12px" onclick="event.stopPropagation()">
+    <img id="lightboxImg" src="" style="max-width:90vw;max-height:80vh;border-radius:var(--radius);box-shadow:0 0 80px rgba(0,0,0,.9)" />
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-primary" onclick="saveLightboxImage()">⬇ Save Image</button>
+      <button class="btn btn-secondary" onclick="copyLightboxImage()">⧉ Copy Image</button>
+      <button class="btn btn-secondary" onclick="closeLightbox()">Close</button>
+    </div>
+  </div>
 </div>
 
 <!-- TOASTS -->
@@ -1487,17 +1578,14 @@ function createJobCard(j) {
   card.className = 'job-card';
 
   const isDone = j.status === 'done' && j.filepath;
-  const thumbClick = isDone
-    ? `openPlayer('${j.id}')`
-    : `openLightbox('${esc(j.thumbnail)}')`;
-  const magIcon = isDone ? '▶' : '🔍';
-  const magStyle = isDone ? 'font-size:28px' : '';
+  const thumbSrc = esc(j.thumbnail);
   const thumb = j.thumbnail
-    ? `<div class="job-thumb-wrap" onclick="${thumbClick}" style="${isDone ? 'cursor:pointer' : ''}">
-        <img src="${esc(j.thumbnail)}" onerror="this.parentElement.style.display='none'" />
-        <div class="mag" style="${magStyle}">${magIcon}</div>
+    ? `<div style="position:relative;width:100%;height:160px;overflow:hidden;flex-shrink:0"${isDone ? ` onclick="openPlayer('${j.id}')" style="position:relative;width:100%;height:160px;overflow:hidden;flex-shrink:0;cursor:pointer"` : ''}>
+        <img src="${thumbSrc}" style="width:100%;height:100%;object-fit:cover;display:block" onerror="this.parentElement.style.display='none'" />
+        ${isDone ? '<div class="play-overlay"><div class="play-overlay-btn">&#9654;</div></div>' : ''}
+        <button class="thumb-img-btn" onclick="event.stopPropagation();openLightbox('${thumbSrc}')" title="View thumbnail"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="10" height="10" rx="1" stroke="currentColor" stroke-width="1.2"/><circle cx="4" cy="4" r="1.2" fill="currentColor"/><path d="M1 8l3-3 2 2 2-2.5L11 8" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg></button>
        </div>`
-    : `<div class="job-thumb-placeholder" ${isDone ? `onclick="openPlayer('${j.id}')" style="cursor:pointer"` : ''}>🎬</div>`;
+    : `<div style="width:100%;height:160px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:32px;color:var(--text3)"${isDone ? ` onclick="openPlayer('${j.id}')" style="cursor:pointer"` : ''}>🎬</div>`;
 
   card.innerHTML = `
     <div class="job-inner">
@@ -1529,7 +1617,8 @@ function createJobCard(j) {
 }
 
 function updateJobCard(card, j) {
-  card.className = `job-card status-${j.status}`;
+  const isMissing = j.status === 'done' && missingFiles.has(j.id);
+  card.className = `job-card status-${j.status}${isMissing ? ' file-missing' : ''}`;
 
   const badge = card.querySelector('.job-badge');
   if (badge) {
@@ -1564,7 +1653,11 @@ function updateJobCard(card, j) {
 
   const revealSlot = card.querySelector('.job-reveal-slot');
   if (revealSlot) {
-    if (j.status === 'done' && j.filepath) {
+    if (isMissing) {
+      if (!revealSlot.querySelector('.redownload')) {
+        revealSlot.innerHTML = `<button class="icon-btn redownload" title="File missing — redownload" onclick="redownloadAndStart('${j.id}')">↺</button>`;
+      }
+    } else if (j.status === 'done' && j.filepath) {
       if (!revealSlot.querySelector('.reveal')) {
         revealSlot.innerHTML = `<button class="icon-btn reveal" title="Show in Explorer" onclick="revealInExplorer('${j.id}')">📂</button>`;
       }
@@ -1655,12 +1748,18 @@ function applyFilters() {
   });
 }
 
+let _lastSiteChipKey = '';
 function updateSiteChips() {
   const sites = {};
   for (const j of Object.values(jobs)) {
     const s = j.site || detectSiteFromUrl(j.url) || 'Other';
     sites[s] = (sites[s] || 0) + 1;
   }
+  // Only rebuild if something actually changed
+  const key = JSON.stringify(Object.entries(sites).sort()) + activeSite;
+  if (key === _lastSiteChipKey) return;
+  _lastSiteChipKey = key;
+
   const container = document.getElementById('siteChips');
   if (!container) return;
   container.innerHTML = Object.entries(sites)
@@ -1674,6 +1773,88 @@ function updateSiteChips() {
         style="${activeStyle}"
         onclick="setSiteFilter('${esc(site)}', this)">${esc(site)} <span style="opacity:.6">${count}</span></button>`;
     }).join('');
+}
+
+// ──────────────────── Missing file check ────────────────────
+let missingFiles = new Set();
+
+async function checkMissingFiles() {
+  try {
+    const res = await fetch('/api/check_files', { method: 'POST' });
+    const data = await res.json();
+    missingFiles = new Set(data.missing || []);
+    // Mark cards visually
+    for (const id of Object.keys(jobs)) {
+      const card = document.getElementById('job-' + id);
+      if (!card) continue;
+      if (missingFiles.has(id)) {
+        card.classList.add('file-missing');
+      } else {
+        card.classList.remove('file-missing');
+      }
+    }
+    // Show/hide redownload missing button
+    const btn = document.getElementById('redownloadMissingBtn');
+    if (btn) btn.style.display = missingFiles.size > 0 ? 'inline-flex' : 'none';
+
+    // Update reveal slots — replace 📂 with ↺ for missing files
+    for (const id of missingFiles) {
+      const card = document.getElementById('job-' + id);
+      if (!card) continue;
+      const revealSlot = card.querySelector('.job-reveal-slot');
+      if (revealSlot && !revealSlot.querySelector('.redownload')) {
+        revealSlot.innerHTML = `<button class="icon-btn redownload" title="File missing — redownload" onclick="redownloadJob('${id}')">↺</button>`;
+      }
+    }
+  } catch {}
+}
+
+async function redownloadJob(jobId) {
+  const res = await fetch(`/api/redownload/${jobId}`, { method: 'POST' });
+  const data = await res.json();
+  if (data.error) { toast('Error: ' + data.error, 'error'); return; }
+  missingFiles.delete(jobId);
+  jobs[jobId].status = 'queued';
+  jobs[jobId].progress = 0;
+  jobs[jobId].filepath = '';
+  renderJobs();
+  toast('Re-queued for download', 'info');
+}
+
+async function redownloadAllMissing() {
+  if (!missingFiles.size) return;
+  let count = 0;
+  for (const id of [...missingFiles]) {
+    await redownloadAndStart(id);
+    await sleep(100);
+    count++;
+  }
+  toast(`Redownloading ${count} missing videos`, 'success');
+}
+
+async function redownloadAndStart(jobId) {
+  const res = await fetch(`/api/redownload/${jobId}`, { method: 'POST' });
+  const data = await res.json();
+  if (data.error) { toast('Error: ' + data.error, 'error'); return; }
+  missingFiles.delete(jobId);
+  if (jobs[jobId]) {
+    jobs[jobId].status = 'queued';
+    jobs[jobId].progress = 0;
+    jobs[jobId].filepath = '';
+  }
+  renderJobs();
+  // immediately kick off download
+  await startJob(jobId);
+}
+
+async function startAll() {
+  const queued = Object.values(jobs).filter(j => j.status === 'queued');
+  if (!queued.length) { toast('No queued videos', 'info'); return; }
+  for (const j of queued) {
+    await startJob(j.id);
+    await sleep(100);
+  }
+  toast(`Started ${queued.length} downloads`, 'success');
 }
 
 // ──────────────────── Folder Picker ────────────────────
@@ -1963,6 +2144,30 @@ function closeLightbox() {
     document.getElementById('lightboxImg').src = '';
   }, 250);
 }
+async function saveLightboxImage() {
+  const src = document.getElementById('lightboxImg').src;
+  if (!src) return;
+  try {
+    const res = await fetch(src);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'thumbnail.jpg';
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch { toast('Failed to save image', 'error'); }
+}
+async function copyLightboxImage() {
+  const src = document.getElementById('lightboxImg').src;
+  if (!src) return;
+  try {
+    const res = await fetch(src);
+    const blob = await res.blob();
+    await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+    toast('Image copied to clipboard', 'success');
+  } catch { toast('Failed to copy image', 'error'); }
+}
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
 
 // ──────────────────── Init ────────────────────
@@ -1984,6 +2189,7 @@ async function saveProxy() {
 
 loadFolder();
 loadProxy();
+setInterval(checkMissingFiles, 10000); // every 10s
 
 // Restore jobs from server on page load
 (async () => {
@@ -1992,6 +2198,7 @@ loadProxy();
     const list = await res.json();
     for (const j of list) jobs[j.id] = j;
     renderJobs();
+    checkMissingFiles(); // check immediately after jobs are loaded
     // resume polling if anything is active
     if (list.some(j => j.status === 'queued' || j.status === 'downloading')) startPolling();
   } catch {}
