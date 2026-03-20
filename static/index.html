@@ -1193,6 +1193,13 @@ video#mainVideo {
         style="font-size:12px;color:var(--text2)"
       />
     </div>
+    <div class="folder-row" style="margin-top:10px">
+      <div class="folder-display" id="cookieDisplay">
+        <span style="margin-right:8px">🍪</span><span id="cookiePath">No cookie file set</span>
+      </div>
+      <button class="btn btn-secondary" id="cookieBtn" onclick="pickCookieFile()">Browse</button>
+      <button class="btn btn-secondary" onclick="clearCookieFile()" style="padding:12px 14px">✕</button>
+    </div>
   </div>
   <!-- QUEUE -->
   <div class="queue-section">
@@ -1626,9 +1633,11 @@ function createJobCard(j) {
           <div class="progress-bar-fill"></div>
         </div>
       </div>
-      <div class="job-actions">
+      <div class="job-actions" style="flex-wrap:wrap;gap:5px">
+        <span class="job-quality-slot"></span>
         <span class="job-action-slot"></span>
         <span class="job-reveal-slot"></span>
+        <button class="icon-btn" title="Copy link" onclick="copyJobLink('${j.id}')">🔗</button>
         <button class="icon-btn del" title="Remove" onclick="deleteJob('${j.id}')">✕</button>
       </div>
     </div>`;
@@ -1657,6 +1666,21 @@ function updateJobCard(card, j) {
     } else {
       metaRight.textContent = j.quality || '';
     }
+  }
+
+  const qualitySlot = card.querySelector('.job-quality-slot');
+  if (qualitySlot && (j.status === 'queued' || j.status === 'error')) {
+    const opts = (j.quality_options || ['best','1080p','720p','480p','360p'])
+      .map(q => `<option value="${esc(q)}"${q === j.quality ? ' selected' : ''}>${esc(q)}</option>`)
+      .join('');
+    if (!qualitySlot.querySelector('select')) {
+      qualitySlot.innerHTML = `<select class="quality-select" style="font-size:10px;padding:4px 6px;height:28px"
+        onchange="changeQuality('${j.id}', this.value)">${opts}</select>`;
+    } else {
+      qualitySlot.querySelector('select').value = j.quality || 'best';
+    }
+  } else if (qualitySlot) {
+    qualitySlot.innerHTML = '';
   }
 
   const actionSlot = card.querySelector('.job-action-slot');
@@ -1905,6 +1929,29 @@ async function openFolderPicker() {
     btn.disabled = false;
     btn.textContent = 'Browse';
   }
+}
+
+// ──────────────────── Job actions ────────────────────
+async function copyJobLink(jobId) {
+  const j = jobs[jobId];
+  if (!j) return;
+  try {
+    await navigator.clipboard.writeText(j.url);
+    toast('Link copied!', 'success');
+  } catch {
+    toast('Failed to copy', 'error');
+  }
+}
+
+async function changeQuality(jobId, quality) {
+  const res = await fetch(`/api/quality/${jobId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ quality }),
+  });
+  const data = await res.json();
+  if (data.error) { toast(data.error, 'error'); return; }
+  if (jobs[jobId]) jobs[jobId].quality = quality;
 }
 
 // ──────────────────── Thumbnail proxy ────────────────────
@@ -2200,6 +2247,47 @@ async function copyLightboxImage() {
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
 
 // ──────────────────── Init ────────────────────
+async function loadCookies() {
+  const res = await fetch('/api/cookies');
+  const data = await res.json();
+  document.getElementById('cookiePath').textContent = data.path || 'No cookie file set';
+  document.getElementById('cookieDisplay').style.borderColor = data.path ? 'rgba(232,255,71,.3)' : '';
+}
+
+async function pickCookieFile() {
+  const btn = document.getElementById('cookieBtn');
+  btn.disabled = true; btn.textContent = 'Picking...';
+  try {
+    const res = await fetch('/api/cookies/pick');
+    const data = await res.json();
+    if (data.error) { toast('Error: ' + data.error, 'error'); return; }
+    if (!data.path) return;
+    const res2 = await fetch('/api/cookies', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: data.path }),
+    });
+    const data2 = await res2.json();
+    if (data2.error) { toast(data2.error, 'error'); return; }
+    document.getElementById('cookiePath').textContent = data2.path;
+    document.getElementById('cookieDisplay').style.borderColor = 'rgba(232,255,71,.3)';
+    toast('Cookie file set', 'success');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Browse';
+  }
+}
+
+async function clearCookieFile() {
+  await fetch('/api/cookies', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: '' }),
+  });
+  document.getElementById('cookiePath').textContent = 'No cookie file set';
+  document.getElementById('cookieDisplay').style.borderColor = '';
+  toast('Cookie file cleared', 'info');
+}
+
 async function loadProxy() {
   const res = await fetch('/api/proxy');
   const data = await res.json();
@@ -2218,6 +2306,7 @@ async function saveProxy() {
 
 loadFolder();
 loadProxy();
+loadCookies();
 setInterval(checkMissingFiles, 10000); // every 10s
 
 // Restore jobs from server on page load

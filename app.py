@@ -7,6 +7,9 @@ from flask import Flask, request, jsonify, send_file, send_from_directory, Respo
 import yt_dlp
 
 
+# Path to a Netscape-format cookies.txt file (optional)
+COOKIE_FILE = ''
+
 # Set your proxy here, e.g. 'http://127.0.0.1:2090' or 'socks5://127.0.0.1:1080'
 # Leave as empty string '' to connect directly
 PROXY = ''
@@ -57,6 +60,7 @@ def save_state():
     state = {
         'proxy': PROXY,
         'download_dir': USER_DOWNLOAD_DIR,
+        'cookie_file': COOKIE_FILE,
         'jobs': jobs_snapshot,
     }
     try:
@@ -73,6 +77,7 @@ def load_state():
         with open(STATE_FILE, 'r', encoding='utf-8') as f:
             state = json.load(f)
         PROXY = state.get('proxy', '')
+        COOKIE_FILE = state.get('cookie_file', '')
         d = state.get('download_dir', DOWNLOAD_DIR)
         if os.path.isdir(d):
             USER_DOWNLOAD_DIR = d
@@ -128,6 +133,9 @@ def fetch_info(url):
         'no_warnings': True,
         'skip_download': True,
         'proxy': PROXY,
+        **({'cookiefile': COOKIE_FILE} if COOKIE_FILE and os.path.exists(COOKIE_FILE) else {}),
+        'nocheckcertificate': bool(PROXY),
+
         'http_headers': {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         },
@@ -205,7 +213,7 @@ def do_download(job_id, url, quality):
     fmt = 'bestvideo+bestaudio/best'
     if quality and quality != 'best':
         h = quality.replace('p', '')
-        fmt = f'bestvideo[height<={h}]+bestaudio/best[height<={h}]/best'
+        fmt = f'bestvideo[height<={h}]+bestaudio/best[height<={h}]/bestvideo+bestaudio/best'
 
     opts = {
         'format': fmt,
@@ -214,6 +222,9 @@ def do_download(job_id, url, quality):
         'quiet': True,
         'no_warnings': True,
         'proxy': PROXY,
+        **({'cookiefile': COOKIE_FILE} if COOKIE_FILE and os.path.exists(COOKIE_FILE) else {}),
+        'nocheckcertificate': bool(PROXY),
+
         'http_headers': {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
             'Referer': 'https://www.pornhub.com/',
@@ -221,6 +232,7 @@ def do_download(job_id, url, quality):
         'socket_timeout': 60,
         'retries': 5,
         'merge_output_format': 'mp4',
+        'keepvideo': False,
         'postprocessors': [{
             'key': 'FFmpegVideoConvertor',
             'preferedformat': 'mp4',
@@ -303,6 +315,7 @@ def api_download():
             'error': '',
             'created_at': time.time(),
             'site': detect_site(url),
+            'quality_options': data.get('quality_options', ['best']),
         }
 
     save_state()
@@ -419,6 +432,39 @@ def api_folder_pick():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/cookies', methods=['GET', 'POST'])
+def api_cookies():
+    global COOKIE_FILE
+    if request.method == 'POST':
+        path = (request.json or {}).get('path', '').strip()
+        if path and not os.path.exists(path):
+            return jsonify({'error': f'File not found: {path}'}), 400
+        COOKIE_FILE = path
+        save_state()
+        print(f'[vortex] Cookie file set to: {COOKIE_FILE!r}')
+        return jsonify({'path': COOKIE_FILE})
+    return jsonify({'path': COOKIE_FILE})
+
+@app.route('/api/cookies/pick', methods=['GET'])
+def api_cookies_pick():
+    try:
+        ps_script = (
+            "Add-Type -AssemblyName System.Windows.Forms;"
+            "$d = New-Object System.Windows.Forms.OpenFileDialog;"
+            "$d.Title = 'Select cookies.txt file';"
+            "$d.Filter = 'Cookie files (*.txt)|*.txt|All files (*.*)|*.*';"
+            "if ($d.ShowDialog() -eq 'OK') { Write-Output $d.FileName }"
+        )
+        import subprocess
+        result = subprocess.run(['powershell', '-NoProfile', '-Command', ps_script],
+            capture_output=True, text=True, timeout=60)
+        chosen = result.stdout.strip()
+        if chosen and os.path.exists(chosen):
+            return jsonify({'path': chosen})
+        return jsonify({'path': None})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/proxy', methods=['GET', 'POST'])
 def api_proxy():
     global PROXY
@@ -468,6 +514,18 @@ def api_check_files():
                 if not fp or not os.path.exists(fp):
                     missing.append(job['id'])
     return jsonify({'missing': missing})
+
+@app.route('/api/quality/<job_id>', methods=['POST'])
+def api_quality(job_id):
+    job = get_job(job_id)
+    if not job:
+        return jsonify({'error': 'Not found'}), 404
+    if job.get('status') not in ('queued', 'error'):
+        return jsonify({'error': 'Can only change quality when queued'}), 400
+    quality = (request.json or {}).get('quality', 'best')
+    update_job(job_id, quality=quality)
+    save_state()
+    return jsonify({'ok': True})
 
 @app.route('/api/reveal/<job_id>', methods=['POST'])
 def api_reveal(job_id):
