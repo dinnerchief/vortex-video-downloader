@@ -25,7 +25,7 @@ echo.
 
 :: Install deps silently
 echo  Installing / updating dependencies...
-python -m pip install flask yt-dlp --quiet --disable-pip-version-check
+python -m pip install -r requirements.txt --quiet --disable-pip-version-check
 if errorlevel 1 (
     echo  [ERROR] Failed to install dependencies.
     pause

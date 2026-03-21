@@ -1,0 +1,65 @@
+#!/bin/bash
+
+set -e
+
+echo ""
+echo " ========================================="
+echo "   VORTEX - Video Downloader Engine"
+echo " ========================================="
+echo ""
+
+
+# Check python
+if ! command -v python3 >/dev/null; then
+  echo -e " \e[31m[ERROR] Python not found!\e[0m"
+  
+  echo ""
+  echo " Please install Python from https://www.python.org/downloads/"
+  echo " Make sure to check "Add Python to PATH" during install."
+  echo ""
+  exit 1
+fi
+
+echo -e " \e[32m[OK] Python found\e[0m"
+echo ""
+
+# Check ffmpeg
+if ! command -v ffmpeg >/dev/null; then
+  echo -e " \e[33m[WARNING] ffmpeg not found - video merging may not work.\e[0m"
+  echo ""
+  echo " Download from: https://ffmpeg.org/download.html"
+  echo " and add it to your PATH for best quality downloads."
+  echo ""
+else
+
+  echo -e " \e[32m[OK] ffmpeg found\e[0m"
+  echo ""
+
+fi
+
+# Create .venv
+if [ ! -d .venv ]; then
+  echo " Creating .venv..."
+  python3 -m venv .venv
+fi
+
+source .venv/bin/activate
+echo " Checking dependencies..."
+python3 -m pip install -r requirements.txt --quiet --disable-pip-version-check
+
+
+echo ""
+echo " Starting server on http://localhost:7860"
+
+# Open browser after short delay
+if command -v xdg-open >/dev/null; then
+  sleep 2
+  echo " Opening browser..."
+  if ! xdg-open http://localhost:7860 &>/dev/null; then
+    echo -e " \e[33mWARNING: Unable to find browser\e[0m" 
+  fi
+fi
+
+echo ""
+
+python3 app.py
