@@ -3,7 +3,7 @@ import uuid
 import time
 import os
 
-from vars import *
+import vars
 
 class File:
     id = str(uuid.uuid4())[:8]
@@ -24,7 +24,7 @@ class File:
         self.quality_options = quality_options
 
     def filepath(self):
-        return os.path.join(USER_DOWNLOAD_DIR, self.filename)
+        return os.path.join(vars.USER_DOWNLOAD_DIR, self.filename)
 
     def remove_locally(self):
         fp = self.filepath()
@@ -41,7 +41,8 @@ class File:
             "thumbnail": self.thumbnail,
             "quality_options": self.quality_options,
             "filename": self.filename,
-            "created_at": self.created_at
+            "created_at": self.created_at,
+            "downloaded": self.downloaded
         }
 
 class FileManager:
@@ -64,20 +65,23 @@ class FileManager:
             self.files[id].downloaded = False
 
         # Refresh downloaded status
-        for l_file in os.listdir(USER_DOWNLOAD_DIR):
+        for l_file in os.listdir(vars.USER_DOWNLOAD_DIR):
             id = l_file.split("_")[0]
-            self.files[id].downloaded = True
+            file = self.get_file(id)
+            if not file: continue
+            file.downloaded = True
 
 
     def fetch_and_save(self, url: str) -> File:
         """Fetch video info without downloading."""
+    
         opts = {
             'quiet': True,
             'no_warnings': True,
             'skip_download': True,
-            'proxy': PROXY,
-            **({'cookiefile': COOKIE_FILE} if COOKIE_FILE and os.path.exists(COOKIE_FILE) else {}),
-            'nocheckcertificate': bool(PROXY),
+            'proxy': vars.PROXY,
+            **({'cookiefile': vars.COOKIE_FILE} if vars.COOKIE_FILE and os.path.exists(vars.COOKIE_FILE) else {}),
+            'nocheckcertificate': bool(vars.PROXY),
             'http_headers': {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
             },

@@ -3,16 +3,15 @@ from .fileManager import File
 
 import threading
 import uuid
-import time
+import os
 
-
-from vars import *
+import vars
 from utils import *
 
 
 class Job:
   id: str = str(uuid.uuid4())[:8]
-  status: str = STATUS.QUEUED.value
+  status: str = vars.STATUS.QUEUED.value
   url: str = None
   progress: int = 0
   speed: str = '0b/s'
@@ -28,23 +27,23 @@ class Job:
     self.filename = filename
   
   def set_error(self, reason="Unknown error"):
-    self.status = STATUS.ERROR.value
+    self.status = vars.STATUS.ERROR.value
     self.error = reason
     self.progress = 0
 
   def download(self, quality):
-    if self.status not in (STATUS.QUEUED.value, STATUS.ERROR.value):
+    if self.status not in (vars.STATUS.QUEUED.value, vars.STATUS.ERROR.value):
         return None # FIX
 
     def do_download(job: Job):
       """Perform the actual download in a thread."""
-      job.status = STATUS.DOWNLOADING.value
+      job.status = vars.STATUS.DOWNLOADING.value
       job.progress = 0
       job.speed = ''
       job.eta = ''
 
       # output_tmpl = os.path.join(USER_DOWNLOAD_DIR, f'{self.file_id}_%(title)s.%(ext)s')
-      output_tmpl = os.path.join(USER_DOWNLOAD_DIR, f'{self.id}.tmp')
+      output_tmpl = os.path.join(vars.USER_DOWNLOAD_DIR, f'{self.id}.tmp')
 
       def progress_hook(d):
           if d['status'] == 'downloading':
@@ -76,9 +75,9 @@ class Job:
           'progress_hooks': [progress_hook],
           'quiet': True,
           'no_warnings': True,
-          'proxy': PROXY,
-          **({'cookiefile': COOKIE_FILE} if COOKIE_FILE and os.path.exists(COOKIE_FILE) else {}),
-          'nocheckcertificate': bool(PROXY),
+          'proxy': vars.PROXY,
+          **({'cookiefile': vars.COOKIE_FILE} if vars.COOKIE_FILE and os.path.exists(vars.COOKIE_FILE) else {}),
+          'nocheckcertificate': bool(vars.PROXY),
           'http_headers': {
               'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
           },
@@ -111,9 +110,13 @@ class Job:
               #             final = os.path.join(DOWNLOAD_DIR, f)
               #             break
               
-              os.rename(os.path.join(USER_DOWNLOAD_DIR, f"{self.id}.tmp"), self.filename)
+              ydl.download([job.url])
+              os.rename(
+                os.path.join(vars.USER_DOWNLOAD_DIR, f"{self.id}.tmp"),
+                os.path.join(vars.USER_DOWNLOAD_DIR, self.filename)
+              )
 
-              job.status = STATUS.DONE.value
+              job.status = vars.STATUS.DONE.value
               job.progress = 100
               job.speed = ''
               job.eta = ''
@@ -122,7 +125,7 @@ class Job:
           job.set_error(str(e))
 
 
-    t = threading.Thread(target=do_download, args=(self), daemon=True)
+    t = threading.Thread(target=do_download, args=[self], daemon=True)
     t.start()
 
     return True
