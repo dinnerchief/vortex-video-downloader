@@ -5,54 +5,17 @@ import threading
 import time
 from flask import Flask, request, jsonify, send_file, send_from_directory, Response
 import yt_dlp
-from jobManager import JobManager
+from managers import FileManager, JobManager
 
-
-# Path to a Netscape-format cookies.txt file (optional)
-COOKIE_FILE = ''
-
-# Set your proxy here, e.g. 'http://127.0.0.1:2090' or 'socks5://127.0.0.1:1080'
-# Leave as empty string '' to connect directly
-PROXY = ''
+from vars import *
 
 app = Flask(__name__, static_folder='static', static_url_path="/static")
 
-import re
-SITE_MAP = {
-    'pornhub': 'PornHub', 'youtube': 'YouTube', 'youtu.be': 'YouTube',
-    'vimeo': 'Vimeo', 'twitter': 'Twitter', 'x.com': 'Twitter',
-    'instagram': 'Instagram', 'tiktok': 'TikTok', 'twitch': 'Twitch',
-    'reddit': 'Reddit', 'xvideos': 'XVideos', 'xhamster': 'xHamster',
-    'xnxx': 'XNXX', 'rule34': 'Rule34', 'spankbang': 'SpankBang',
-    'eporner': 'EPorner', 'redtube': 'RedTube', 'youporn': 'YouPorn',
-    'bilibili': 'Bilibili', 'dailymotion': 'Dailymotion', 'rumble': 'Rumble',
-}
-
-def detect_site(url):
-    url_lower = (url or '').lower()
-    for key, name in SITE_MAP.items():
-        if key in url_lower:
-            return name
-    return 'Other'
-
-def strip_ansi(s):
-    s = s or ''
-    # Strip proper ANSI escape codes
-    s = re.sub(r'\x1b\[[0-9;]*[A-Za-z]', '', s)
-    # Strip mangled codes like D[0;32m or \x0f[1m etc
-    s = re.sub(r'.\[[0-9;]+[A-Za-z]', '', s)
-    return s.strip()
-
-DOWNLOAD_DIR = os.path.join(os.path.dirname(__file__), 'downloads')
-os.makedirs(DOWNLOAD_DIR, exist_ok=True)
-
-# User-configurable download folder
-USER_DOWNLOAD_DIR = DOWNLOAD_DIR
 
 # In-memory job store: {job_id: {...}}
 jobs = JobManager()
+files = FileManager()
 
-STATE_FILE = os.path.join(os.path.dirname(__file__), 'vortex_state.json')
 
 def save_state():
     state = {
@@ -106,155 +69,6 @@ def load_state():
     except Exception as e:
         print(f'[vortex] Failed to load state: {e}')
 
-def yt_dlp_opts_for_info(url):
-    return {
-        'quiet': True,
-        'no_warnings': True,
-        'extract_flat': False,
-        'skip_download': True,
-    }
-
-def fetch_info(url):
-    """Fetch video info without downloading."""
-    opts = {
-        'quiet': True,
-        'no_warnings': True,
-        'skip_download': True,
-        'proxy': PROXY,
-        **({'cookiefile': COOKIE_FILE} if COOKIE_FILE and os.path.exists(COOKIE_FILE) else {}),
-        'nocheckcertificate': bool(PROXY),
-
-        'http_headers': {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        },
-    }
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-        if info is None:
-            raise ValueError("Could not extract info")
-        
-        # Handle playlists
-        if info.get('_type') == 'playlist':
-            entries = info.get('entries', [])
-            return {
-                'type': 'playlist',
-                'title': info.get('title', 'Playlist'),
-                'thumbnail': info.get('thumbnail', ''),
-                'count': len(entries),
-                'entries': [
-                    {
-                        'url': e.get('url') or e.get('webpage_url', ''),
-                        'title': e.get('title', 'Unknown'),
-                        'thumbnail': e.get('thumbnail', ''),
-                        'duration': e.get('duration', 0),
-                        'uploader': e.get('uploader', ''),
-                    } for e in entries if e
-                ]
-            }
-        
-        formats = info.get('formats', [])
-        # Build quality options
-        quality_map = {}
-        for f in formats:
-            height = f.get('height')
-            if height and f.get('vcodec') != 'none':
-                label = f"{height}p"
-                if label not in quality_map:
-                    quality_map[label] = f.get('format_id')
-        
-        quality_options = sorted(quality_map.keys(), key=lambda x: int(x.replace('p','')), reverse=True)
-        if not quality_options:
-            quality_options = ['best']
-
-        return {
-            'type': 'video',
-            'title': info.get('title', 'Unknown Title'),
-            'thumbnail': info.get('thumbnail', ''),
-            'duration': info.get('duration', 0),
-            'uploader': info.get('uploader', ''),
-            'view_count': info.get('view_count', 0),
-            'description': (info.get('description') or '')[:300],
-            'quality_options': quality_options,
-            'webpage_url': info.get('webpage_url', url),
-            'extractor': info.get('extractor_key', ''),
-        }
-
-def do_download(job_id, url, quality):
-    """Perform the actual download in a thread."""
-    update_job(job_id, status='downloading', progress=0, speed='', eta='')
-
-    output_tmpl = os.path.join(USER_DOWNLOAD_DIR, f'{job_id}_%(title)s.%(ext)s')
-
-    def progress_hook(d):
-        if d['status'] == 'downloading':
-            pct = 0
-            total = d.get('total_bytes') or d.get('total_bytes_estimate', 0)
-            downloaded = d.get('downloaded_bytes', 0)
-            if total:
-                pct = int(downloaded / total * 100)
-            speed = strip_ansi(d.get('_speed_str', ''))
-            eta = strip_ansi(d.get('_eta_str', ''))
-            update_job(job_id, progress=pct, speed=speed, eta=eta)
-        elif d['status'] == 'finished':
-            update_job(job_id, progress=100, speed='', eta='Finishing...')
-
-    fmt = 'bestvideo+bestaudio/best'
-    if quality and quality != 'best':
-        h = quality.replace('p', '')
-        fmt = f'bestvideo[height<={h}]+bestaudio/best[height<={h}]/bestvideo+bestaudio/best'
-
-    opts = {
-        'format': fmt,
-        'outtmpl': output_tmpl,
-        'progress_hooks': [progress_hook],
-        'quiet': True,
-        'no_warnings': True,
-        'proxy': PROXY,
-        **({'cookiefile': COOKIE_FILE} if COOKIE_FILE and os.path.exists(COOKIE_FILE) else {}),
-        'nocheckcertificate': bool(PROXY),
-
-        'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        },
-        'socket_timeout': 60,
-        'retries': 5,
-        'merge_output_format': 'mp4',
-        'keepvideo': False,
-        'postprocessors': [{
-            'key': 'FFmpegVideoConvertor',
-            'preferedformat': 'mp4',
-        }],
-    }
-
-    try:
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            filename = ydl.prepare_filename(info)
-            # Find actual file (may have been merged/converted)
-            base = os.path.splitext(filename)[0]
-            final = None
-            for ext in ['.mp4', '.mkv', '.webm', '.m4a', '.mp3']:
-                candidate = base + ext
-                if os.path.exists(candidate):
-                    final = candidate
-                    break
-            if not final:
-                # Search by job_id prefix
-                for f in os.listdir(USER_DOWNLOAD_DIR):
-                    if f.startswith(job_id):
-                        final = os.path.join(DOWNLOAD_DIR, f)
-                        break
-            
-            save_state()
-            update_job(job_id,
-                status='done',
-                progress=100,
-                filename=os.path.basename(final) if final else '',
-                filepath=final or '',
-                speed='', eta='')
-    except Exception as e:
-        update_job(job_id, status='error', error=str(e), progress=0)
-        save_state()
 
 # ──────────────────────────── Routes ────────────────────────────
 
@@ -262,36 +76,122 @@ def do_download(job_id, url, quality):
 def index():
     return send_from_directory('static', 'index.html')
 
-@app.route('/api/info', methods=['POST'])
-def api_info():
+@app.route('/api/files', methods=['POST'])
+def api_fetch():
     data = request.json or {}
     url = (data.get('url') or '').strip()
     if not url:
         return jsonify({'error': 'No URL provided'}), 400
     try:
-        info = fetch_info(url)
-        return jsonify(info)
+        file = files.fetch_and_save(url)
+        return jsonify(file.json())
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 
 
+@app.route('/api/files', methods=['DELETE'])
+def api_delete_files():
+    modes = ('done', 'all')
 
-@app.route('/api/download', methods=['POST'])
-def api_download():
     data = request.json or {}
-    url = (data.get('url') or '').strip()
+    mode = data.get('mode')
+    mode = 'done' if mode not in modes else mode
+
+    def remove(file_id):
+        files.remove_file(file_id, True)
+        job_id = jobs.get_job_by_file(file_id)
+        if job_id != None:
+            jobs.remove_job(job_id)
+
+    counter = 0
+    match mode:
+        case "all":
+            for file_id in files.files:
+                remove(file_id)
+                counter += 1
+        case "done":
+            for file_id in files.files:
+                file = files.get_file(file_id)
+                if file.downloaded:
+                    remove(file_id)
+                    counter += 1
+
+    save_state()
+    return jsonify({'removed': counter})
+
+@app.route('/api/files/<file_id>', methods=['DELETE'])
+def api_delete_file(file_id):
+    files.remove_file(file_id, True)
+    job_id = jobs.get_job_by_file(file_id)
+    if job_id != None:
+        jobs.remove_job(job_id)
+
+    save_state()
+    return jsonify({'ok': True})
+
+@app.route('/api/files/<file_id>/reveal', methods=['POST'])
+def api_reveal(file_id):
+    """Open the file's folder in Windows Explorer with the file selected."""
+    file = files.get_file(file_id)
+    if not file or not file.downloaded:
+        return jsonify({'error': 'No file'}), 404
+    fp = file.filepath()
+    try:
+        import suapirocess
+        suapirocess.Popen(['explorer', '/select,', fp])
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/files/<file_id>/file')
+def api_file_stream(file_id):
+    file = files.get_file(file_id)
+    if not file or file.downloaded:
+        return jsonify({'error': 'Not ready'}), 404
+    
+    fp = file.filepath()
+    if not fp or not os.path.exists(fp):
+        return jsonify({'error': 'File not found'}), 404
+    
+    return send_file(fp, as_attachment=True, download_name=os.path.basename(fp))
+
+@app.route('/api/files/<file_id>/download', methods=['POST'])
+def api_download(file_id):
+    data = request.json or {}
     quality = data.get('quality', 'best')
-    quality_options = data.get('quality_options', ['best'])
-    title = data.get('title', 'Unknown')
-    thumbnail = data.get('thumbnail', '')
 
-    if not url:
-        return jsonify({'error': 'No URL provided'}), 400
+    # url = (data.get('url') or '').strip()
+    # quality_options = data.get('quality_options', ['best'])
+    # title = data.get('title', 'Unknown')
+    # thumbnail = data.get('thumbnail', '')
 
-    job = jobs.create_job(title, url, quality, quality_options, thumbnail)
+    # if not url:
+    #     return jsonify({'error': 'No URL provided'}), 400
+
+    file = files.get_file(file_id)
+    if file is None:
+        return jsonify({'error': 'File not found'}), 400
+
+    if jobs.get_job_by_file(file_id):
+        return jsonify({'error': 'Has an active job for this file'}, 403)
+
+    if file.downloaded:
+        files.remove_file(file_id)
+
+    job = jobs.create_job(file)
+    job.download(quality)
     save_state()
 
     return jsonify({'job_id': job.id})
+
+@app.route('/api/update')
+def api_update():
+    files.sync_local_files()
+
+    return jsonify({
+        "jobs": jobs.json(),
+        "files": files.json()
+    })
 
 @app.route('/api/folder', methods=['GET', 'POST'])
 def api_folder():
@@ -394,146 +294,49 @@ def api_proxy():
         return jsonify({'proxy': PROXY})
     return jsonify({'proxy': PROXY})
 
-@app.route('/api/check_files', methods=['POST'])
-def api_check_files():
-    """Return list of done job ids whose files are missing from disk."""
-    missing = []
-    for job in jobs.values():
-        if job.get('status') == 'done':
-            fp = job.get('filepath', '')
-            if not fp or not os.path.exists(fp):
-                missing.append(job['id'])
-    return jsonify({'missing': missing})
+# @app.route('/api/check_files', methods=['POST'])
+# def api_check_files():
+#     """Return list of done job ids whose files are missing from disk."""
+#     missing = []
+#     for job in jobs.values():
+#         if job.get('status') == 'done':
+#             fp = job.get('filepath', '')
+#             if not fp or not os.path.exists(fp):
+#                 missing.append(job['id'])
+#     return jsonify({'missing': missing})
 
 @app.route('/api/thumb')
 def api_thumb():
     url = request.args.get('url', '').strip()
     if not url:
         return '', 400
+    
     try:
         import urllib.request
         req = urllib.request.Request(url, headers={
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-            'Referer': 'https://www.youtube.com/',
         })
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = resp.read()
             content_type = resp.headers.get('Content-Type', 'image/jpeg')
+
         from flask import Response
         return Response(data, content_type=content_type)
+    
     except Exception as e:
         return str(e), 502
 
-
-
-@app.route('/api/start/<job_id>', methods=['POST'])
-def api_start(job_id):
-    job = jobs.get_job(job_id)
-    if not job:
-        return jsonify({'error': 'Not found'}), 404
-    if job.get('status') not in ('queued', 'error'):
-        return jsonify({'error': 'Already running or done'}), 400
-    t = threading.Thread(target=do_download, args=(job_id, job['url'], job['quality']), daemon=True)
-    t.start()
-    return jsonify({'ok': True})
-
-@app.route('/api/status/<job_id>')
-def api_status(job_id):
-    job = jobs.get_job(job_id)
-    if not job:
-        return jsonify({'error': 'Not found'}), 404
-    return jsonify(job)
-
-@app.route('/api/jobs')
-def api_jobs():
-    return jsonify(jobs.json())
-
-@app.route('/api/file/<job_id>')
-def api_file(job_id):
-    job = jobs.get_job(job_id)
-    if not job or job.get('status') != 'done':
-        return jsonify({'error': 'Not ready'}), 404
-    fp = job.get('filepath', '')
-    if not fp or not os.path.exists(fp):
-        return jsonify({'error': 'File not found'}), 404
-    return send_file(fp, as_attachment=True, download_name=os.path.basename(fp))
-
-@app.route('/api/delete/<job_id>', methods=['DELETE'])
-def api_delete(job_id):
-    with jobs_lock:
-        job = jobs.pop(job_id, None)
-    if job:
-        pass  # file is kept on disk
-    save_state()
-    return jsonify({'ok': True})
-
-@app.route('/api/clear', methods=['POST'])
-def api_clear():
-    data = request.json or {}
-    mode = data.get('mode', 'done')  # 'done' or 'all'
-    with jobs_lock:
-        to_remove = [jid for jid, j in jobs.items() if mode == 'all' or j['status'] in ('done', 'error')]
-        for jid in to_remove:
-            del jobs[jid]
-    save_state()
-    return jsonify({'removed': len(to_remove)})
-
-@app.route('/api/stream/<job_id>')
-def api_stream(job_id):
-    job = get_job(job_id)
-    if not job or not job.get('filepath'):
-        return jsonify({'error': 'No file'}), 404
-    fp = job['filepath']
-    if not os.path.exists(fp):
-        return jsonify({'error': 'File not found'}), 404
-    return send_file(fp, conditional=True)
-
-@app.route('/api/redownload/<job_id>', methods=['POST'])
-def api_redownload(job_id):
-    job = get_job(job_id)
-    if not job:
-        return jsonify({'error': 'Not found'}), 404
-    # Reset job so it can be restarted — use current USER_DOWNLOAD_DIR
-    update_job(job_id,
-        status='queued',
-        progress=0,
-        speed='',
-        eta='',
-        filename='',
-        filepath='',
-        error='',
-    )
-    save_state()
-    return jsonify({'ok': True})
-
-
-@app.route('/api/quality/<job_id>', methods=['POST'])
-def api_quality(job_id):
-    job = get_job(job_id)
-    if not job:
-        return jsonify({'error': 'Not found'}), 404
-    if job.get('status') not in ('queued', 'error'):
-        return jsonify({'error': 'Can only change quality when queued'}), 400
-    quality = (request.json or {}).get('quality', 'best')
-    update_job(job_id, quality=quality)
-    save_state()
-    return jsonify({'ok': True})
-
-@app.route('/api/reveal/<job_id>', methods=['POST'])
-def api_reveal(job_id):
-    """Open the file's folder in Windows Explorer with the file selected."""
-    job = get_job(job_id)
-    if not job or not job.get('filepath'):
-        return jsonify({'error': 'No file'}), 404
-    fp = job['filepath']
-    if not os.path.exists(fp):
-        return jsonify({'error': 'File not found'}), 404
-    try:
-        import suapirocess
-        suapirocess.Popen(['explorer', '/select,', fp])
-        return jsonify({'ok': True})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+# @app.route('/api/quality/<job_id>', methods=['POST'])
+# def api_quality(job_id):
+#     job = get_job(job_id)
+#     if not job:
+#         return jsonify({'error': 'Not found'}), 404
+#     if job.get('status') not in ('queued', 'error'):
+#         return jsonify({'error': 'Can only change quality when queued'}), 400
+#     quality = (request.json or {}).get('quality', 'best')
+#     update_job(job_id, quality=quality)
+#     save_state()
+#     return jsonify({'ok': True})
 
 
 if __name__ == '__main__':

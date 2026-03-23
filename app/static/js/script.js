@@ -1,0 +1,1003 @@
+
+// ──────────────────── State ────────────────────
+let currentPreview = null;
+let jobs = {};         // job_id → job obj
+let pollTimer = null;
+
+// ──────────────────── Fetch info ────────────────────
+async function handleFetch() {
+  const url = document.getElementById('urlInput').value.trim();
+  if (!url) { toast('Paste a URL first', 'error'); return; }
+
+  const btn = document.getElementById('fetchBtn');
+  const icon = document.getElementById('fetchBtnIcon');
+  btn.disabled = true;
+  icon.innerHTML = '<span class="spinner" style="display:inline-block;vertical-align:middle;margin:-2px 4px 0 0"></span>';
+
+  try {
+    const res = await fetch('/api/files', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || 'Failed to fetch info');
+
+    const quality = (data.quality_options || ['best'])[0];
+    await startDownload(url, data.title, data.thumbnail, quality);
+
+    document.getElementById('urlInput').value = '';
+  } catch (e) {
+    toast('Error: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    icon.textContent = '⚡';
+  }
+}
+
+document.getElementById('urlInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') handleFetch();
+});
+
+function hidePreview() {
+  const card = document.getElementById('previewCard');
+  card.classList.remove('visible');
+  card.innerHTML = '';
+}
+
+function formatDuration(s) {
+  if (!s) return '';
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+  return `${m}:${String(sec).padStart(2, '0')}`;
+}
+
+function formatViews(n) {
+  if (!n) return '';
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M views';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K views';
+  return n + ' views';
+}
+
+function showPreview(data, url) {
+  const card = document.getElementById('previewCard');
+
+  if (data.type === 'playlist') {
+    card.innerHTML = `
+      <div class="playlist-header">
+        <div class="playlist-icon">🎵</div>
+        <div class="playlist-info">
+          <div class="playlist-title">${esc(data.title)}</div>
+          <div class="playlist-count">${data.count} videos in playlist</div>
+        </div>
+        <button class="btn btn-primary" onclick="queueAll()">⬇ Queue All</button>
+      </div>
+    `;
+  } else {
+    const thumbHtml = data.thumbnail
+      ? `<img class="preview-thumb" src="${esc(data.thumbnail)}" onerror="this.style.display='none'" />`
+      : `<div class="preview-thumb-placeholder">🎬</div>`;
+
+    const qualityOptions = (data.quality_options || ['best'])
+      .map(q => `<option value="${esc(q)}">${q}</option>`)
+      .join('');
+
+    card.innerHTML = `
+      <div class="preview-inner">
+        ${thumbHtml}
+        <div class="preview-meta">
+          <div class="preview-title">${esc(data.title)}</div>
+          <div class="preview-sub">
+            ${data.uploader ? `<span>👤 ${esc(data.uploader)}</span>` : ''}
+            ${data.duration ? `<span>⏱ ${formatDuration(data.duration)}</span>` : ''}
+            ${data.view_count ? `<span>👁 ${formatViews(data.view_count)}</span>` : ''}
+            ${data.extractor ? `<span>🔗 ${esc(data.extractor)}</span>` : ''}
+          </div>
+          <div class="quality-row">
+            <span class="quality-label">Quality</span>
+            <select class="quality-select" id="qualitySelect">
+              ${qualityOptions}
+            </select>
+            <button class="btn btn-primary" onclick="queueSingle()" style="margin-left:auto">
+              + Add to Queue
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  card.classList.add('visible');
+}
+
+// ──────────────────── Queue actions ────────────────────
+async function queueSingle() {
+  if (!currentPreview) return;
+  const quality = document.getElementById('qualitySelect')?.value || 'best';
+  await startDownload(currentPreview.url, currentPreview.title, currentPreview.thumbnail, quality);
+  hidePreview();
+  document.getElementById('urlInput').value = '';
+  currentPreview = null;
+}
+
+async function queueAll() {
+  if (!currentPreview || currentPreview.type !== 'playlist') return;
+  const entries = currentPreview.entries || [];
+  if (!entries.length) { toast('No entries found in playlist', 'error'); return; }
+
+  toast(`Queuing ${entries.length} videos...`, 'info');
+  for (const e of entries) {
+    await startDownload(e.url, e.title, e.thumbnail, 'best');
+    await sleep(100);
+  }
+  hidePreview();
+  document.getElementById('urlInput').value = '';
+  currentPreview = null;
+}
+
+async function startDownload(url, title, thumbnail, quality) {
+  const res = await fetch('/api/files/download', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url, title, thumbnail, quality }),
+  });
+  const data = await res.json();
+  if (data.error) { toast('Error: ' + data.error, 'error'); return; }
+
+  // Optimistic add
+  jobs[data.job_id] = {
+    id: data.job_id, title, thumbnail, quality,
+    status: 'queued', progress: 0, speed: '', eta: '',
+    filename: '', filepath: '', error: '', url,
+  };
+  renderJobs();
+  toast(`Added: ${title.slice(0, 40)}...`, 'success');
+  startPolling();
+}
+
+async function downloadAll() {
+  const done = Object.values(jobs).filter(j => j.status === 'done');
+  if (!done.length) { toast('No completed downloads', 'info'); return; }
+  for (const j of done) {
+    triggerFileDownload(j.id);
+    await sleep(400);
+  }
+}
+
+async function startJob(jobId) {
+  const res = await fetch(`/api/start/${jobId}`, { method: 'POST' });
+  const data = await res.json();
+  if (data.error) { toast('Error: ' + data.error, 'error'); return; }
+  if (jobs[jobId]) jobs[jobId].status = 'downloading';
+  renderJobs();
+  startPolling();
+}
+
+function triggerFileDownload(jobId) {
+  const a = document.createElement('a');
+  a.href = `/api/file/${jobId}`;
+  a.download = '';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+async function deleteJob(jobId) {
+  await fetch(`/api/delete/${jobId}`, { method: 'DELETE' });
+  delete jobs[jobId];
+  renderJobs();
+}
+
+async function clearDone() {
+  await fetch('/api/clear', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'done' }) });
+  for (const id of Object.keys(jobs)) {
+    if (jobs[id].status === 'done' || jobs[id].status === 'error') delete jobs[id];
+  }
+  renderJobs();
+}
+
+async function clearAll() {
+  await fetch('/api/clear', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'all' }) });
+  jobs = {};
+  renderJobs();
+}
+
+// ──────────────────── Polling ────────────────────
+function startPolling() {
+  if (pollTimer) return;
+  pollTimer = setInterval(pollJobs, 800);
+}
+
+async function pollJobs() {
+  const active = Object.values(jobs).filter(j => j.status === 'queued' || j.status === 'downloading');
+  if (!active.length) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+    return;
+  }
+  try {
+    const res = await fetch('/api/jobs');
+    const list = await res.json();
+    for (const j of list) {
+      jobs[j.id] = j;
+    }
+    renderJobs();
+  } catch { }
+}
+
+// ──────────────────── Render ────────────────────
+function renderJobs() {
+  const sortVal = document.getElementById('sortSelect')?.value || 'date-desc';
+  const list = Object.values(jobs).sort((a, b) => {
+    if (sortVal === 'date-asc') return (a.created_at || 0) - (b.created_at || 0);
+    if (sortVal === 'date-desc') return (b.created_at || 0) - (a.created_at || 0);
+    if (sortVal === 'title-asc') return (a.title || '').localeCompare(b.title || '');
+    if (sortVal === 'title-desc') return (b.title || '').localeCompare(a.title || '');
+    if (sortVal === 'status') {
+      const order = { downloading: 0, queued: 1, error: 2, done: 3 };
+      return (order[a.status] || 9) - (order[b.status] || 9);
+    }
+    return (b.created_at || 0) - (a.created_at || 0);
+  });
+  const container = document.getElementById('jobList');
+  const empty = document.getElementById('queueEmpty');
+  const count = document.getElementById('queueCount');
+
+  count.textContent = list.length;
+  empty.style.display = list.length ? 'none' : 'block';
+  container.style.display = list.length ? 'grid' : 'none';
+
+
+
+  // Show/hide filter bar
+  const filterBar = document.getElementById('filterBar');
+  if (filterBar) filterBar.style.display = list.length ? 'flex' : 'none';
+
+  updateSiteChips();
+  applyFilters();
+
+  // Remove cards no longer in jobs
+  const current = new Set(list.map(j => 'job-' + j.id));
+  [...container.children].forEach(el => { if (!current.has(el.id)) el.remove(); });
+
+  // Create missing cards
+  list.forEach(j => {
+    if (!document.getElementById('job-' + j.id)) {
+      container.appendChild(createJobCard(j));
+    }
+    updateJobCard(document.getElementById('job-' + j.id), j);
+  });
+
+  // Reorder DOM to match sorted list (move each card to correct position)
+  list.forEach((j, idx) => {
+    const card = document.getElementById('job-' + j.id);
+    const current = container.children[idx];
+    if (current !== card) container.insertBefore(card, current || null);
+  });
+}
+
+function createJobCard(j) {
+  const card = document.createElement('div');
+  card.id = 'job-' + j.id;
+  card.className = 'job-card';
+
+  const isDone = j.status === 'done' && j.filepath;
+  const thumbSrc = esc(thumbUrl(j.thumbnail));
+  const thumb = j.thumbnail
+    ? `<div style="position:relative;width:100%;height:160px;overflow:hidden;flex-shrink:0"${isDone ? ` onclick="openPlayer('${j.id}')" style="position:relative;width:100%;height:160px;overflow:hidden;flex-shrink:0;cursor:pointer"` : ''}>
+        <img src="${thumbSrc}" style="width:100%;height:100%;object-fit:cover;display:block" onerror="this.parentElement.style.display='none'" />
+        ${isDone ? '<div class="play-overlay"><div class="play-overlay-btn">&#9654;</div></div>' : ''}
+        <button class="thumb-img-btn" onclick="event.stopPropagation();openLightbox('${thumbSrc}')" title="View thumbnail"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="10" height="10" rx="1" stroke="currentColor" stroke-width="1.2"/><circle cx="4" cy="4" r="1.2" fill="currentColor"/><path d="M1 8l3-3 2 2 2-2.5L11 8" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg></button>
+       </div>`
+    : `<div style="width:100%;height:160px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:32px;color:var(--text3)"${isDone ? ` onclick="openPlayer('${j.id}')" style="cursor:pointer"` : ''}>🎬</div>`;
+
+  card.innerHTML = `
+    <div class="job-inner">
+      ${thumb}
+      <div class="job-body">
+        <div class="job-info">
+          <div class="job-title">${esc(j.title || j.url)}</div>
+          <div class="job-meta">
+            <span class="job-site">${siteBadgeHtml(j.site, j.url)}</span>
+            <span class="job-badge"></span>
+            <span class="job-meta-right"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="job-footer">
+      <div class="job-progress-wrap" style="display:none">
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill"></div>
+        </div>
+      </div>
+      <div class="job-actions" style="flex-wrap:wrap;gap:5px">
+        <span class="job-quality-slot"></span>
+        <span class="job-action-slot"></span>
+        <span class="job-reveal-slot"></span>
+        <button class="icon-btn" title="Copy link" onclick="copyJobLink('${j.id}')">🔗</button>
+        <button class="icon-btn del" title="Remove" onclick="deleteJob('${j.id}')">✕</button>
+      </div>
+    </div>`;
+  return card;
+}
+
+function updateJobCard(card, j) {
+  const isMissing = j.status === 'done' && missingFiles.has(j.id);
+  card.className = `job-card status-${j.status}${isMissing ? ' file-missing' : ''}`;
+
+  const badge = card.querySelector('.job-badge');
+  if (badge) {
+    badge.className = `status-badge badge-${j.status} job-badge`;
+    badge.textContent = j.status;
+  }
+
+  const metaRight = card.querySelector('.job-meta-right');
+  if (metaRight) {
+    if (j.status === 'downloading') {
+      const speedHtml = j.speed ? `<span style="color:var(--accent);font-weight:500">${esc(j.speed)}</span>` : '';
+      const etaHtml = j.eta ? `<span style="color:var(--text2)">ETA <span style="color:var(--accent2)">${esc(j.eta)}</span></span>` : '';
+      const sep = speedHtml && etaHtml ? '<span style="color:var(--border2);padding:0 6px">|</span>' : '';
+      metaRight.innerHTML = speedHtml + sep + etaHtml;
+    } else if (j.status === 'error') {
+      metaRight.innerHTML = `<span style="color:var(--accent3)">${esc((j.error || '').slice(0, 60))}</span>`;
+    } else {
+      metaRight.textContent = j.quality || '';
+    }
+  }
+
+  const qualitySlot = card.querySelector('.job-quality-slot');
+  if (qualitySlot && (j.status === 'queued' || j.status === 'error')) {
+    const opts = (j.quality_options || ['best', '1080p', '720p', '480p', '360p'])
+      .map(q => `<option value="${esc(q)}"${q === j.quality ? ' selected' : ''}>${esc(q)}</option>`)
+      .join('');
+    if (!qualitySlot.querySelector('select')) {
+      qualitySlot.innerHTML = `<select class="quality-select" style="font-size:10px;padding:4px 6px;height:28px"
+        onchange="changeQuality('${j.id}', this.value)">${opts}</select>`;
+    } else {
+      qualitySlot.querySelector('select').value = j.quality || 'best';
+    }
+  } else if (qualitySlot) {
+    qualitySlot.innerHTML = '';
+  }
+
+  const actionSlot = card.querySelector('.job-action-slot');
+  if (actionSlot) {
+    if (j.status === 'queued' || j.status === 'error') {
+      if (!actionSlot.querySelector('.start')) {
+        actionSlot.innerHTML = `<button class="icon-btn start" title="Start download" onclick="startJob('${j.id}')">▶</button>`;
+      }
+    } else {
+      actionSlot.innerHTML = '';
+    }
+  }
+
+  const revealSlot = card.querySelector('.job-reveal-slot');
+  if (revealSlot) {
+    if (isMissing) {
+      if (!revealSlot.querySelector('.redownload')) {
+        revealSlot.innerHTML = `<button class="icon-btn redownload" title="File missing — redownload" onclick="redownloadAndStart('${j.id}')">↺</button>`;
+      }
+    } else if (j.status === 'done' && j.filepath) {
+      if (!revealSlot.querySelector('.reveal')) {
+        revealSlot.innerHTML = `<button class="icon-btn reveal" title="Show in Explorer" onclick="revealInExplorer('${j.id}')">📂</button>`;
+      }
+    } else {
+      revealSlot.innerHTML = '';
+    }
+  }
+
+  const progressWrap = card.querySelector('.job-progress-wrap');
+  const progressFill = card.querySelector('.progress-bar-fill');
+  if (progressWrap && progressFill) {
+    const show = j.status === 'downloading' || j.status === 'done' || j.status === 'error';
+    progressWrap.style.display = show ? 'block' : 'none';
+    progressFill.style.width = (j.progress || 0) + '%';
+    progressFill.className = 'progress-bar-fill' +
+      (j.status === 'done' ? ' done' : j.status === 'error' ? ' error' : '');
+  }
+  // Show progress pct in meta when downloading
+  const pctSpan = card.querySelector('.job-pct');
+  if (j.status === 'downloading' && j.progress > 0) {
+    if (!pctSpan) {
+      const badge = card.querySelector('.job-badge');
+      if (badge) {
+        const span = document.createElement('span');
+        span.className = 'job-pct';
+        span.style.cssText = 'font-family:DM Mono,monospace;font-size:10px;color:var(--accent2)';
+        badge.parentElement.appendChild(span);
+      }
+    }
+    if (card.querySelector('.job-pct')) card.querySelector('.job-pct').textContent = j.progress + '%';
+  } else if (pctSpan) {
+    pctSpan.remove();
+  }
+}
+
+function esc(s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ──────────────────── Toasts ────────────────────
+function toast(msg, type = 'info') {
+  const icons = { success: '✅', error: '❌', info: 'ℹ️' };
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `<span>${icons[type] || 'ℹ️'}</span><span>${esc(msg)}</span>`;
+  document.getElementById('toastContainer').appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ──────────────────── Filters ────────────────────
+let activeStatus = 'all';
+let activeSite = null;
+
+function setStatusFilter(status, el) {
+  activeStatus = status;
+  document.querySelectorAll('#filterChips .chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  applyFilters();
+}
+
+function setSiteFilter(site, el) {
+  if (activeSite === site) {
+    activeSite = null;
+    el.classList.remove('active');
+  } else {
+    activeSite = site;
+    document.querySelectorAll('#siteChips .chip').forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+  }
+  applyFilters();
+}
+
+function applyFilters() {
+  const query = (document.getElementById('filterSearch')?.value || '').toLowerCase();
+  document.querySelectorAll('.job-card').forEach(card => {
+    const id = card.id.replace('job-', '');
+    const j = jobs[id];
+    if (!j) return;
+
+    const matchStatus = activeStatus === 'all' || j.status === activeStatus;
+    const resolvedSite = j.site || detectSiteFromUrl(j.url);
+    const matchSite = !activeSite || resolvedSite === activeSite;
+    const matchSearch = !query || (j.title || j.url || '').toLowerCase().includes(query);
+
+    card.style.display = (matchStatus && matchSite && matchSearch) ? '' : 'none';
+  });
+}
+
+let _lastSiteChipKey = '';
+function updateSiteChips() {
+  const sites = {};
+  for (const j of Object.values(jobs)) {
+    const s = j.site || detectSiteFromUrl(j.url) || 'Other';
+    sites[s] = (sites[s] || 0) + 1;
+  }
+  // Only rebuild if something actually changed
+  const key = JSON.stringify(Object.entries(sites).sort()) + activeSite;
+  if (key === _lastSiteChipKey) return;
+  _lastSiteChipKey = key;
+
+  const container = document.getElementById('siteChips');
+  if (!container) return;
+  container.innerHTML = Object.entries(sites)
+    .sort((a, b) => b[1] - a[1])
+    .map(([site, count]) => {
+      const sc = SITE_COLORS[site];
+      const activeStyle = activeSite === site && sc
+        ? `background:${sc.bg};color:${sc.color};border-color:${sc.color}`
+        : '';
+      return `<button class="chip site-chip${activeSite === site ? ' active' : ''}"
+        style="${activeStyle}"
+        onclick="setSiteFilter('${esc(site)}', this)">${esc(site)} <span style="opacity:.6">${count}</span></button>`;
+    }).join('');
+}
+
+// ──────────────────── Missing file check ────────────────────
+let missingFiles = new Set();
+
+async function checkMissingFiles() {
+  try {
+    const res = await fetch('/api/check_files', { method: 'POST' });
+    const data = await res.json();
+    missingFiles = new Set(data.missing || []);
+    // Mark cards visually
+    for (const id of Object.keys(jobs)) {
+      const card = document.getElementById('job-' + id);
+      if (!card) continue;
+      if (missingFiles.has(id)) {
+        card.classList.add('file-missing');
+      } else {
+        card.classList.remove('file-missing');
+      }
+    }
+    // Show/hide redownload missing button
+    const btn = document.getElementById('redownloadMissingBtn');
+    if (btn) btn.style.display = missingFiles.size > 0 ? 'inline-flex' : 'none';
+
+    // Update reveal slots — replace 📂 with ↺ for missing files
+    for (const id of missingFiles) {
+      const card = document.getElementById('job-' + id);
+      if (!card) continue;
+      const revealSlot = card.querySelector('.job-reveal-slot');
+      if (revealSlot && !revealSlot.querySelector('.redownload')) {
+        revealSlot.innerHTML = `<button class="icon-btn redownload" title="File missing — redownload" onclick="redownloadJob('${id}')">↺</button>`;
+      }
+    }
+  } catch { }
+}
+
+async function redownloadJob(jobId) {
+  const res = await fetch(`/api/redownload/${jobId}`, { method: 'POST' });
+  const data = await res.json();
+  if (data.error) { toast('Error: ' + data.error, 'error'); return; }
+  missingFiles.delete(jobId);
+  jobs[jobId].status = 'queued';
+  jobs[jobId].progress = 0;
+  jobs[jobId].filepath = '';
+  renderJobs();
+  toast('Re-queued for download', 'info');
+}
+
+async function redownloadAllMissing() {
+  if (!missingFiles.size) return;
+  let count = 0;
+  for (const id of [...missingFiles]) {
+    await redownloadAndStart(id);
+    await sleep(100);
+    count++;
+  }
+  toast(`Redownloading ${count} missing videos`, 'success');
+}
+
+async function redownloadAndStart(jobId) {
+  const res = await fetch(`/api/redownload/${jobId}`, { method: 'POST' });
+  const data = await res.json();
+  if (data.error) { toast('Error: ' + data.error, 'error'); return; }
+  missingFiles.delete(jobId);
+  if (jobs[jobId]) {
+    jobs[jobId].status = 'queued';
+    jobs[jobId].progress = 0;
+    jobs[jobId].filepath = '';
+  }
+  renderJobs();
+  // immediately kick off download
+  await startJob(jobId);
+}
+
+async function startAll() {
+  const queued = Object.values(jobs).filter(j => j.status === 'queued');
+  if (!queued.length) { toast('No queued videos', 'info'); return; }
+  for (const j of queued) {
+    await startJob(j.id);
+    await sleep(100);
+  }
+  toast(`Started ${queued.length} downloads`, 'success');
+}
+
+// ──────────────────── Folder Picker ────────────────────
+async function loadFolder() {
+  const res = await fetch('/api/folder');
+  const data = await res.json();
+  document.getElementById('folderPath').textContent = data.folder;
+}
+
+async function openFolderPicker() {
+  const btn = document.getElementById('browseBtn');
+  btn.disabled = true;
+  btn.textContent = 'Picking...';
+  try {
+    const res = await fetch('/api/folder/pick');
+    const data = await res.json();
+    if (data.error) { toast('Error: ' + data.error, 'error'); return; }
+    if (!data.path) return; // user cancelled
+    const res2 = await fetch('/api/folder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folder: data.path }),
+    });
+    const data2 = await res2.json();
+    if (data2.error) { toast('Error: ' + data2.error, 'error'); return; }
+    document.getElementById('folderPath').textContent = data2.folder;
+    toast('Download folder set', 'success');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Browse';
+  }
+}
+
+// ──────────────────── Job actions ────────────────────
+async function copyJobLink(jobId) {
+  const j = jobs[jobId];
+  if (!j) return;
+  try {
+    await navigator.clipboard.writeText(j.url);
+    toast('Link copied!', 'success');
+  } catch {
+    toast('Failed to copy', 'error');
+  }
+}
+
+async function changeQuality(jobId, quality) {
+  const res = await fetch(`/api/quality/${jobId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ quality }),
+  });
+  const data = await res.json();
+  if (data.error) { toast(data.error, 'error'); return; }
+  if (jobs[jobId]) jobs[jobId].quality = quality;
+}
+
+// ──────────────────── Thumbnail proxy ────────────────────
+function thumbUrl(url) {
+  if (!url) return '';
+  // Proxy ytimg and youtube thumbnails through backend to bypass CORS/referrer block
+  if (url.includes('ytimg.com') || url.includes('yt3.gg') || url.includes('i.ytimg')) {
+    return '/api/thumb?url=' + encodeURIComponent(url);
+  }
+  return url;
+}
+
+// ──────────────────── Site colors ────────────────────
+const SITE_COLORS = {
+  'YouTube': { bg: 'rgba(255,0,0,.15)', color: '#ff4444' },
+  'PornHub': { bg: 'rgba(255,149,0,.15)', color: '#ff9500' },
+  'Vimeo': { bg: 'rgba(26,183,234,.15)', color: '#1ab7ea' },
+  'Twitter': { bg: 'rgba(29,161,242,.15)', color: '#1da1f2' },
+  'Instagram': { bg: 'rgba(225,48,108,.15)', color: '#e1306c' },
+  'TikTok': { bg: 'rgba(254,44,85,.15)', color: '#fe2c55' },
+  'Twitch': { bg: 'rgba(145,71,255,.15)', color: '#9147ff' },
+  'Reddit': { bg: 'rgba(255,69,0,.15)', color: '#ff4500' },
+  'XVideos': { bg: 'rgba(255,0,0,.15)', color: '#ff2020' },
+  'xHamster': { bg: 'rgba(255,102,0,.15)', color: '#ff6600' },
+  'XNXX': { bg: 'rgba(255,50,50,.15)', color: '#ff3232' },
+  'SpankBang': { bg: 'rgba(255,80,0,.15)', color: '#ff5000' },
+  'Bilibili': { bg: 'rgba(0,161,214,.15)', color: '#00a1d6' },
+  'Dailymotion': { bg: 'rgba(0,120,220,.15)', color: '#0078dc' },
+  'Rumble': { bg: 'rgba(133,195,0,.15)', color: '#85c300' },
+};
+
+const SITE_URL_MAP = {
+  'pornhub': 'PornHub', 'youtube': 'YouTube', 'youtu.be': 'YouTube',
+  'vimeo': 'Vimeo', 'twitter': 'Twitter', 'x.com': 'Twitter',
+  'instagram': 'Instagram', 'tiktok': 'TikTok', 'twitch': 'Twitch',
+  'reddit': 'Reddit', 'xvideos': 'XVideos', 'xhamster': 'xHamster',
+  'xnxx': 'XNXX', 'rule34': 'Rule34', 'spankbang': 'SpankBang',
+  'eporner': 'EPorner', 'redtube': 'RedTube', 'youporn': 'YouPorn',
+  'bilibili': 'Bilibili', 'dailymotion': 'Dailymotion', 'rumble': 'Rumble',
+};
+
+function detectSiteFromUrl(url) {
+  const u = (url || '').toLowerCase();
+  for (const [key, name] of Object.entries(SITE_URL_MAP)) {
+    if (u.includes(key)) return name;
+  }
+  return null;
+}
+
+function siteBadgeHtml(site, url) {
+  const resolved = site || detectSiteFromUrl(url);
+  if (!resolved) return '';
+  const s = SITE_COLORS[resolved] || { bg: 'rgba(100,100,100,.2)', color: 'var(--text3)' };
+  return `<span class="site-badge" style="background:${s.bg};color:${s.color}">${esc(resolved)}</span>`;
+}
+
+async function revealInExplorer(jobId) {
+  const res = await fetch(`/api/reveal/${jobId}`, { method: 'POST' });
+  const data = await res.json();
+  if (data.error) toast('Error: ' + data.error, 'error');
+}
+
+// ──────────────────── Video Player ────────────────────
+let playerQueue = [];   // job ids of done videos
+let playerIndex = 0;
+let shuffleOn = false;
+let repeatOne = false;
+let loopAll = false;
+let seekDragging = false;
+
+const vid = () => document.getElementById('mainVideo');
+
+function getDoneJobs() {
+  return Object.values(jobs)
+    .filter(j => j.status === 'done' && j.filepath)
+    .sort((a, b) => (a.created_at || 0) - (b.created_at || 0));
+}
+
+function openPlayer(jobId) {
+  const done = getDoneJobs();
+  if (!done.length) return;
+  playerQueue = done.map(j => j.id);
+  playerIndex = playerQueue.indexOf(jobId);
+  if (playerIndex < 0) playerIndex = 0;
+
+  const overlay = document.getElementById('playerOverlay');
+  overlay.classList.add('open');
+  requestAnimationFrame(() => requestAnimationFrame(() => overlay.classList.add('visible')));
+
+  loadPlayerTrack(playerIndex);
+  renderPlaylist();
+}
+
+function closePlayer() {
+  const overlay = document.getElementById('playerOverlay');
+  overlay.classList.remove('visible');
+  vid().pause();
+  vid().src = '';
+  setTimeout(() => overlay.classList.remove('open'), 250);
+}
+
+function loadPlayerTrack(idx) {
+  playerIndex = idx;
+  const id = playerQueue[idx];
+  const j = jobs[id];
+  if (!j) return;
+
+  const v = vid();
+  v.src = `/api/stream/${id}`;
+  v.playbackRate = parseFloat(document.getElementById('speedSelect').value) || 1;
+  v.load();
+  v.play().catch(() => { });
+
+  document.getElementById('playerTitle').textContent = j.title || 'Unknown';
+  document.getElementById('playerSiteBadge').innerHTML = siteBadgeHtml(j.site, j.url);
+
+  // Highlight active in playlist
+  document.querySelectorAll('.playlist-item').forEach((el, i) => {
+    el.classList.toggle('active', i === idx);
+    if (i === idx) el.scrollIntoView({ block: 'nearest' });
+  });
+}
+
+function renderPlaylist() {
+  const container = document.getElementById('playerPlaylist');
+  container.innerHTML = playerQueue.map((id, i) => {
+    const j = jobs[id];
+    if (!j) return '';
+    return `<div class="playlist-item${i === playerIndex ? ' active' : ''}" onclick="loadPlayerTrack(${i})">
+      ${j.thumbnail ? `<img src="${esc(thumbUrl(j.thumbnail))}" onerror="this.style.display='none'" />` : ''}
+      <div class="playlist-item-info">
+        <div class="playlist-item-title">${esc(j.title || j.url)}</div>
+        <div class="playlist-item-meta">${siteBadgeHtml(j.site, j.url)}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function togglePlay() {
+  const v = vid();
+  v.paused ? v.play() : v.pause();
+}
+
+function playNext() {
+  if (shuffleOn) {
+    playerIndex = Math.floor(Math.random() * playerQueue.length);
+  } else {
+    playerIndex = (playerIndex + 1) % playerQueue.length;
+  }
+  loadPlayerTrack(playerIndex);
+  renderPlaylist();
+}
+
+function playPrev() {
+  const v = vid();
+  if (v.currentTime > 3) { v.currentTime = 0; return; }
+  playerIndex = (playerIndex - 1 + playerQueue.length) % playerQueue.length;
+  loadPlayerTrack(playerIndex);
+  renderPlaylist();
+}
+
+function toggleShuffle() {
+  shuffleOn = !shuffleOn;
+  document.getElementById('btnShuffle').classList.toggle('active', shuffleOn);
+}
+
+function toggleRepeatOne() {
+  repeatOne = !repeatOne;
+  loopAll = false;
+  document.getElementById('btnRepeatOne').classList.toggle('active', repeatOne);
+  document.getElementById('btnLoopAll').classList.remove('active');
+  vid().loop = repeatOne;
+}
+
+function toggleLoopAll() {
+  loopAll = !loopAll;
+  repeatOne = false;
+  vid().loop = false;
+  document.getElementById('btnLoopAll').classList.toggle('active', loopAll);
+  document.getElementById('btnRepeatOne').classList.remove('active');
+}
+
+function setSpeed(val) { vid().playbackRate = parseFloat(val); }
+
+function setVolume(val) {
+  const v = vid();
+  v.volume = parseFloat(val);
+  v.muted = false;
+  document.getElementById('btnMute').textContent = val == 0 ? '🔇' : '🔊';
+}
+
+function toggleMute() {
+  const v = vid();
+  v.muted = !v.muted;
+  document.getElementById('btnMute').textContent = v.muted ? '🔇' : '🔊';
+  if (!v.muted) document.getElementById('volSlider').value = v.volume;
+}
+
+function toggleFullscreen() {
+  const el = document.getElementById('mainVideo');
+  if (document.fullscreenElement) document.exitFullscreen();
+  else el.requestFullscreen?.();
+}
+
+function fmtTime(s) {
+  if (!isFinite(s)) return '0:00';
+  const m = Math.floor(s / 60), sec = Math.floor(s % 60);
+  return `${m}:${String(sec).padStart(2, '0')}`;
+}
+
+// Wire up video events
+document.addEventListener('DOMContentLoaded', () => {
+  const v = vid();
+
+  v.addEventListener('timeupdate', () => {
+    if (seekDragging) return;
+    const pct = v.duration ? (v.currentTime / v.duration) * 1000 : 0;
+    document.getElementById('seekBar').value = pct;
+    document.getElementById('playerTimeCur').textContent = fmtTime(v.currentTime);
+    document.getElementById('playerTimeDur').textContent = fmtTime(v.duration);
+  });
+
+  v.addEventListener('play', () => document.getElementById('btnPlayPause').textContent = '⏸');
+  v.addEventListener('pause', () => document.getElementById('btnPlayPause').textContent = '▶');
+
+  v.addEventListener('ended', () => {
+    if (repeatOne) { v.play(); return; }
+    if (playerIndex < playerQueue.length - 1 || loopAll) playNext();
+  });
+
+  const seekBar = document.getElementById('seekBar');
+  seekBar.addEventListener('mousedown', () => seekDragging = true);
+  seekBar.addEventListener('input', () => {
+    if (v.duration) v.currentTime = (seekBar.value / 1000) * v.duration;
+  });
+  seekBar.addEventListener('mouseup', () => seekDragging = false);
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', e => {
+    if (!document.getElementById('playerOverlay').classList.contains('open')) return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+    if (e.key === 'Escape') closePlayer();
+    if (e.key === ' ') { e.preventDefault(); togglePlay(); }
+    if (e.key === 'ArrowRight') v.currentTime = Math.min(v.duration, v.currentTime + 10);
+    if (e.key === 'ArrowLeft') v.currentTime = Math.max(0, v.currentTime - 10);
+    if (e.key === 'ArrowUp') { v.volume = Math.min(1, v.volume + 0.1); document.getElementById('volSlider').value = v.volume; }
+    if (e.key === 'ArrowDown') { v.volume = Math.max(0, v.volume - 0.1); document.getElementById('volSlider').value = v.volume; }
+    if (e.key === 'n') playNext();
+    if (e.key === 'p') playPrev();
+  });
+});
+
+// ──────────────────── Lightbox ────────────────────
+function openLightbox(src) {
+  const bg = document.getElementById('lightboxBg');
+  const img = document.getElementById('lightboxImg');
+  img.src = src;
+  bg.classList.add('open');
+  requestAnimationFrame(() => requestAnimationFrame(() => bg.classList.add('visible')));
+}
+function closeLightbox() {
+  const bg = document.getElementById('lightboxBg');
+  bg.classList.remove('visible');
+  setTimeout(() => {
+    bg.classList.remove('open');
+    document.getElementById('lightboxImg').src = '';
+  }, 250);
+}
+async function saveLightboxImage() {
+  const src = document.getElementById('lightboxImg').src;
+  if (!src) return;
+  try {
+    const res = await fetch(src);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'thumbnail.jpg';
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch { toast('Failed to save image', 'error'); }
+}
+async function copyLightboxImage() {
+  const src = document.getElementById('lightboxImg').src;
+  if (!src) return;
+  try {
+    const res = await fetch(src);
+    const blob = await res.blob();
+    await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+    toast('Image copied to clipboard', 'success');
+  } catch { toast('Failed to copy image', 'error'); }
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+
+// ──────────────────── Init ────────────────────
+async function loadCookies() {
+  const res = await fetch('/api/cookies');
+  const data = await res.json();
+  document.getElementById('cookiePath').textContent = data.path || 'No cookie file set';
+  document.getElementById('cookieDisplay').style.borderColor = data.path ? 'rgba(232,255,71,.3)' : '';
+}
+
+async function pickCookieFile() {
+  const btn = document.getElementById('cookieBtn');
+  btn.disabled = true; btn.textContent = 'Picking...';
+  try {
+    const res = await fetch('/api/cookies/pick');
+    const data = await res.json();
+    if (data.error) { toast('Error: ' + data.error, 'error'); return; }
+    if (!data.path) return;
+    const res2 = await fetch('/api/cookies', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: data.path }),
+    });
+    const data2 = await res2.json();
+    if (data2.error) { toast(data2.error, 'error'); return; }
+    document.getElementById('cookiePath').textContent = data2.path;
+    document.getElementById('cookieDisplay').style.borderColor = 'rgba(232,255,71,.3)';
+    toast('Cookie file set', 'success');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Browse';
+  }
+}
+
+async function clearCookieFile() {
+  await fetch('/api/cookies', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: '' }),
+  });
+  document.getElementById('cookiePath').textContent = 'No cookie file set';
+  document.getElementById('cookieDisplay').style.borderColor = '';
+  toast('Cookie file cleared', 'info');
+}
+
+async function loadProxy() {
+  const res = await fetch('/api/proxy');
+  const data = await res.json();
+  if (data.proxy) document.getElementById('proxyInput').value = data.proxy;
+}
+
+async function saveProxy() {
+  const proxy = document.getElementById('proxyInput').value.trim();
+  await fetch('/api/proxy', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ proxy }),
+  });
+  toast(proxy ? 'Proxy saved: ' + proxy : 'Proxy cleared', 'info');
+}
+
+loadFolder();
+loadProxy();
+loadCookies();
+setInterval(checkMissingFiles, 10000); // every 10s
+
+// Restore jobs from server on page load
+(async () => {
+  try {
+    const res = await fetch('/api/jobs');
+    const list = await res.json();
+    for (const j of list) jobs[j.id] = j;
+    renderJobs();
+    checkMissingFiles(); // check immediately after jobs are loaded
+    // resume polling if anything is active
+    if (list.some(j => j.status === 'queued' || j.status === 'downloading')) startPolling();
+  } catch { }
+})();

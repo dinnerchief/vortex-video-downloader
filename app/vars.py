@@ -1,0 +1,23 @@
+import os
+import enum
+class STATUS(enum.Enum):
+  ERROR = 'error'
+  QUEUED = 'queued'
+  DOWNLOADING = 'downloading'
+  DONE = 'done'
+
+
+# Path to a Netscape-format cookies.txt file (optional)
+COOKIE_FILE = ''
+
+# Set your proxy here, e.g. 'http://127.0.0.1:2090' or 'socks5://127.0.0.1:1080'
+# Leave as empty string '' to connect directly
+PROXY = ''
+
+DOWNLOAD_DIR = os.path.join(os.path.dirname(__file__), 'downloads')
+STATE_FILE = os.path.join(os.path.dirname(__file__), 'vortex_state.json')
+
+os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+
+# User-configurable download folder
+USER_DOWNLOAD_DIR = DOWNLOAD_DIR
