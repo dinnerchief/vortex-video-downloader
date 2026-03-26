@@ -45,9 +45,9 @@ def load_state():
 
         for file in state.get('files', []):
             f = File(
-                file.get('title'),
                 file.get('source'),
                 file.get('filename'),
+                file.get('title'),
                 file.get('thumbnail'),
                 file.get('quality_options')
             )
@@ -173,8 +173,13 @@ def api_download(file_id):
     if file is None:
         return jsonify({'error': 'File not found'}), 400
 
-    if jobs.get_job_by_file(file_id):
-        return jsonify({'error': 'Has an active job for this file'}, 403)
+    job = jobs.get_job(jobs.get_job_by_file(file_id))
+    if job and job.status == vars.STATUS.ERROR.value:
+        jobs.remove_job(job.id)
+    elif job:
+        return jsonify({'error': 'Has an active job for this file'}), 403
+
+    file.quality = quality
 
     if file.downloaded:
         files.remove_file(file_id)
@@ -195,6 +200,17 @@ def api_cancel_job(job_id: str):
 @app.route('/api/update')
 def api_update():
     files.sync_local_files()
+
+    # clear jobs with status 'done'
+    for id in files.files:
+        file = files.get_file(id)
+        if not file.downloaded: continue
+
+        job_id = jobs.get_job_by_file(file.id)
+        job = jobs.get_job(job_id)
+        if job and job.status == vars.STATUS.DONE.value:
+            jobs.remove_job(job_id)
+
     save_state()
 
     return jsonify({

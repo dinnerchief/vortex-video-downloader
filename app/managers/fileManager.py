@@ -2,29 +2,34 @@ from yt_dlp import YoutubeDL
 import uuid
 import time
 import os
+import json
 
 import vars
+import utils
 
 class File:
-    id = str(uuid.uuid4())[:8]
     title = ''
     thumbnail = ''
     source = ''
+    site = ''
     quality_options: list[str] = []
-    created_at:float = time.time()
     filename: str =  ''
     downloaded: bool = False
+    quality: str = ''
 
 
     def __init__(self, source, filename, title, thumbnail, quality_options):
+        self.created_at = time.time()
+        self.id = str(uuid.uuid4())[:8]
         self.title = title
         self.source = source
-        self.filename = f"{self.id}_{filename}"
+        self.site = utils.detect_site(source)
+        self.filename = filename
         self.thumbnail = thumbnail
         self.quality_options = quality_options
 
     def filepath(self):
-        return os.path.join(vars.USER_DOWNLOAD_DIR, self.filename)
+        return os.path.join(vars.USER_DOWNLOAD_DIR, f"{self.id}_{self.filename}")
 
     def remove_locally(self):
         fp = self.filepath()
@@ -41,8 +46,11 @@ class File:
             "thumbnail": self.thumbnail,
             "quality_options": self.quality_options,
             "filename": self.filename,
+            "filepath": self.filepath(),
             "created_at": self.created_at,
-            "downloaded": self.downloaded
+            "downloaded": self.downloaded,
+            "quality": self.quality,
+            "site": self.site
         }
 
 class FileManager:
@@ -94,16 +102,14 @@ class FileManager:
             filename = ydl.prepare_filename(info)
 
             formats = info.get('formats', [])
+            # print(formats)
             # Build quality options
-            quality_map = {}
+            quality_set = set()
             for f in formats:
                 height = f.get('height')
-                if height and f.get('vcodec') != 'none':
-                    label = f"{height}p"
-                    if label not in quality_map:
-                        quality_map[label] = f.get('format_id')
-            
-            quality_options = sorted(quality_map.keys(), key=lambda x: int(x.replace('p','')), reverse=True)
+                if height and f.get("vcodec"): quality_set.add(f"{height}p")
+                
+            quality_options = sorted(quality_set, key=lambda x: int(x.replace('p','')), reverse=True)
             if not quality_options:
                 quality_options = ['best']
 

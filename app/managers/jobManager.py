@@ -10,7 +10,6 @@ from utils import *
 
 
 class Job:
-  id: str = str(uuid.uuid4())[:8]
   status: str = vars.STATUS.QUEUED.value
   url: str = None
   progress: int = 0
@@ -22,6 +21,7 @@ class Job:
   filename: str = ''
 
   def __init__(self, file_id: str, source: str, filename: str):
+    self.id = str(uuid.uuid4())[:8]
     self.file_id = file_id
     self.url = source
     self.filename = filename
@@ -43,7 +43,7 @@ class Job:
       job.eta = ''
 
       # output_tmpl = os.path.join(USER_DOWNLOAD_DIR, f'{self.file_id}_%(title)s.%(ext)s')
-      output_tmpl = os.path.join(vars.USER_DOWNLOAD_DIR, f'{self.id}.tmp')
+      output_tmpl = os.path.join(vars.USER_DOWNLOAD_DIR, f'{self.file_id}_%(title)s.mp4')
 
       def progress_hook(d):
           if d['status'] == 'downloading':
@@ -111,10 +111,6 @@ class Job:
               #             break
               
               ydl.download([job.url])
-              os.rename(
-                os.path.join(vars.USER_DOWNLOAD_DIR, f"{self.id}.tmp"),
-                os.path.join(vars.USER_DOWNLOAD_DIR, self.filename)
-              )
 
               job.status = vars.STATUS.DONE.value
               job.progress = 100
@@ -130,7 +126,7 @@ class Job:
 
     return True
 
-  def cancel():
+  def cancel(self):
     pass
 
   def json(self):
@@ -141,6 +137,7 @@ class Job:
       "error": self.error,
       "speed": self.speed,
       "status": self.status,
+      "file_id": self.file_id,
       "quality": self.quality,
       "filename": self.filename,
       "progress": self.progress,
