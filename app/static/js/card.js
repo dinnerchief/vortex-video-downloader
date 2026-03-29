@@ -188,6 +188,7 @@ class Card {
     hide(this.elActRedownload)
     hide(this.elBtnReveal)
     hide(this.elActStart)
+    hide(this.elPlayOverlay)
 
     switch (status) {
       case "queued":
@@ -199,6 +200,7 @@ class Card {
         show(this.elPrgsWrap)
         break
       case "done":
+        show(this.elPlayOverlay)
         show(this.elQuality)
         show(this.elBtnReveal)
         show(this.elPrgsWrap)
