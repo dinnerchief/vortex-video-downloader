@@ -28,6 +28,15 @@ function thumbUrl(url) {
   return url;
 }
 
+async function copyToClipboard(content = "") {
+  try {
+    await navigator.clipboard.writeText(content);
+    toast('Copied!', 'success');
+  } catch {
+    toast('Failed to copy', 'error');
+  }
+}
+
 // ──────────────────── Site colors ────────────────────
 const SITE_COLORS = {
   'YouTube': { bg: 'rgba(255,0,0,.15)', color: '#ff4444' },
@@ -114,6 +123,12 @@ function removeCard(id) {
   cards.delete(id)
 }
 
+/**
+ * @param {(a: APIFile, b: APIFile) => }
+ */
+function sortCards(fn) {
+
+}
 
 const container = document.getElementById('jobList');
 const empty = document.getElementById('queueEmpty');

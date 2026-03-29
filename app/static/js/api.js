@@ -22,6 +22,18 @@ async function callFetchFile(url) {
   }).then(res => res.json());
 }
 
+async function callCancelJob(job_id) {
+  return await fetch(`/api/jobs/${job_id}`, { method: "DELETE" })
+    .then(res => res.json());
+}
+
+async function callDeleteFile(file_id) {
+  return await fetch(`/api/files/${file_id}`, { method: "DELETE" })
+    .then(res => res.json());
+}
+
+
+
 class APIFile {
   constructor(raw) {
     this.id = raw.id
@@ -42,6 +54,7 @@ class APIFile {
     if (data.error) throw new Error(data.error)
     return data
   }
+  
 }
 
 class APIJob {

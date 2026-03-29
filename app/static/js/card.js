@@ -101,7 +101,7 @@ class Card {
       )
     )
 
-    this.elBtnCopy = el("button", { className: "icon-btn", title: "Copy link", onclick: () => copyJobLink(file.id) }, "🔗")
+    this.elBtnCopy = el("button", { className: "icon-btn", title: "Copy link", onclick: () => copyToClipboard(file.source) }, "🔗")
     this.elBtnDel = el("button", { className: "icon-btn del", title: "Remove", onclick: () => deleteJob(file.id) }, "✕")
 
     this.elActStart = el("button", {
