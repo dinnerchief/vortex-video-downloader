@@ -9,10 +9,7 @@ let jobs = new Map();         // job_id → job obj
  */
 let _index_file_job = {}
 
-/**
- * @type {Map<string, APIFile>}
- */
-let files = new Map();
+const cards = new CardManager("jobList")
 
 
 function esc(s) {
@@ -102,42 +99,15 @@ function toast(msg, type = 'info') {
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-/**
- * 
- * @param {APIFile} file 
- */
-function createCard(file) {
-  const container = document.getElementById("jobList")
-  const card = new Card(file)
-  cards.set(file.id, card)
-  container.append(card.el)
-}
-
-/**
- * 
- * @param {string} id 
- */
-function removeCard(id) {
-  const card = cards.get(id)
-  card.el.remove()
-  cards.delete(id)
-}
-
-/**
- * @param {(a: APIFile, b: APIFile) => }
- */
-function sortCards(fn) {
-
-}
-
 const container = document.getElementById('jobList');
 const empty = document.getElementById('queueEmpty');
 const count = document.getElementById('queueCount');
+const filterBar = document.getElementById('filterBar');
 
 async function update() {
   const data = await fetch("/api/update")
     .then(res => res.json())
-  
+
   if (data.error) return toast("Unable to update file list")
 
   const values = new Set()
@@ -147,10 +117,13 @@ async function update() {
       values.add(file.id)
       const card = cards.get(file.id)
       if (card) card.file = file
-      else createCard(file)
+      else cards.createCard(file)
     })
   cards.forEach((card, k) => {
-    if (!values.has(k)) removeCard(k)
+    if (!values.has(k)) {
+      cards.removeCard(k)
+      cards.delete(k)
+    }
   })
 
   _index_file_job = {}
@@ -164,20 +137,21 @@ async function update() {
 
   cards.forEach(v => {
     const job = jobs.get(_index_file_job[v.file.id])
-    // if (job && job.status == 'downloading')
     v.render(job)
   })
 
   count.textContent = cards.size;
   empty.style.display = cards.size ? 'none' : 'block';
   container.style.display = cards.size ? 'grid' : 'none';
+  filterBar.style.display = cards.size ? 'flex' : 'none';
 }
 
-async function handleStartJob(file_id) {
-  const card = cards.get(file_id)
-  await card.file.download(card.quality)
-
-  await update()
+function startAll() {
+  cards.forEach(async card => {
+    if (card.file.downloaded) return
+    const job = await card.file.download()
+    card.render(job)
+  })
 }
 
 async function handleFetch() {
@@ -194,12 +168,13 @@ async function handleFetch() {
     if (data.error) throw new Error(data.error || 'Failed to fetch info');
 
     const file = new APIFile(data)
-    createCard(file)
+    const card = cards.createCard(file)
+    card.render()
 
     toast(`Added: ${file.title.slice(0, 40)}...`, 'success');
 
     document.getElementById('urlInput').value = '';
-    await update()
+
   } catch (e) {
     console.error(e)
     toast('Error: ' + e.message, 'error');
@@ -209,8 +184,99 @@ async function handleFetch() {
   }
 }
 
-update()
+const cardStatus = card => _index_file_job[card.file.id] ? jobs.get(_index_file_job[card.file.id]).status : card.file.downloaded ? 'done' : 'queued'
 
-setInterval(async () => {
-  if ([...jobs.values()].find(v => v.status == 'downloading')) await update()
-}, 1000)
+const sortByCreatedAtASC = (a, b) => (a.file.created_at || 0) - (b.file.created_at || 0) 
+const sortByCreatedAtDESC = (a, b) => (b.file.created_at || 0) - (a.file.created_at || 0) 
+const sortByTitleASC = (a, b) => (a.file.title || '').localeCompare(b.file.title || '')
+const sortByTitleDESC = (a, b) => (b.file.title || '').localeCompare(a.file.title || '') 
+const sortByStatus = (a, b) => {
+  const order = { downloading: 0, queued: 1, error: 2, done: 3 };
+  return (order[cardStatus(a)] || 9) - (order[cardStatus(b)] || 9);
+}
+
+let delayQuery = null
+function handleFilterQuery(query) {
+  clearTimeout(delayQuery)
+  delayQuery = setTimeout(() => {
+    cards.applyFilters()
+  }, 250)
+  if (!query) {
+    cards.removeFilter("query")
+    return
+  }
+  cards.setFilter("query", (card) => (card.file.title + card.file.description).search(new RegExp(query, "i")) != -1)
+}
+
+function handleFilterStatus(btn, status) {
+  document.querySelectorAll('#filterChips .chip').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+
+  if (status == 'all') {
+    cards.removeFilter("status")
+    cards.applyFilters()
+    return
+  }
+  cards.setFilter("status", (card) => cardStatus(card) == status)
+  cards.applyFilters()
+}
+
+function handleSort(type) {
+  switch (type) {
+    case "date-asc":
+      cards.clearSorts()
+      cards.setSort(type, sortByCreatedAtASC)
+      break;
+    case "date-desc":
+      cards.clearSorts()
+      cards.setSort(type, sortByCreatedAtDESC)
+      break;
+    case "title-asc":
+      cards.clearSorts()
+      cards.setSort(type, sortByTitleASC)
+      break;
+    case "title-desc":
+      cards.clearSorts()
+      cards.setSort(type, sortByTitleDESC)
+      break;
+    case "status":
+      cards.clearSorts()
+      cards.setSort(type, sortByStatus)
+      break;
+    default:
+      throw new Error(`Unknown sort type '${type}'`)
+  }
+
+  cards.reorderFromList(cards.getSortedList())
+}
+
+
+async function clearDone() {
+  cards.forEach(card => {
+    if (card.file.downloaded) card.hide()
+  })
+  await callDeleteFilesWithMode("done").catch(e => {
+    console.error(e)
+    cards.applyFilters()
+  }).then(() => update())
+}
+
+async function clearAll() {
+  cards.forEach(card => card.hide())
+  await callDeleteFilesWithMode("done").catch(e => {
+    console.error(e)
+    cards.applyFilters()
+  }).then(() => update())
+}
+
+
+document.addEventListener("DOMContentLoaded", async _ => {
+  await update()
+
+  const sortType = document.getElementById("sortSelect").value
+  handleSort(sortType)
+
+  setInterval(async () => {
+    await update()
+  }, 1000)
+})

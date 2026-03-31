@@ -27,3 +27,6 @@ async function openFolderPicker() {
     btn.textContent = 'Browse';
   }
 }
+
+
+document.addEventListener("DOMContentLoaded", () => loadFolder())

@@ -27,10 +27,29 @@ async function callCancelJob(job_id) {
     .then(res => res.json());
 }
 
-async function callDeleteFile(file_id) {
-  return await fetch(`/api/files/${file_id}`, { method: "DELETE" })
+async function callDeleteFilesWithMode(mode, force = false) {
+  if (!mode || !['all', 'done'].includes(mode)) throw new Error("No selected mode. Availbale: 'all', 'done'")
+  return await fetch(`/api/files`, {
+    method: "DELETE",
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ force, mode }),
+  })
     .then(res => res.json());
 }
+
+async function callDeleteFile(file_id, force = false) {
+  return await fetch(`/api/files/${file_id}`, {
+    method: "DELETE",
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ force }),
+  })
+    .then(res => res.json());
+}
+
+async function callRevealFile(file_id) {
+  await fetch(`/api/files/${file_id}/reveal`, { method: "POST" });
+}
+
 
 
 
@@ -47,6 +66,8 @@ class APIFile {
     this.created_at = raw.created_at
     this.downloaded = raw.downloaded
     this.quality = raw.quality
+
+    this.description = raw.description || ''
   }
 
   async download(quality) {
@@ -54,7 +75,7 @@ class APIFile {
     if (data.error) throw new Error(data.error)
     return data
   }
-  
+
 }
 
 class APIJob {

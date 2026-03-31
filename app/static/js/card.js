@@ -1,8 +1,3 @@
-/**
- * { Map< file_id , Card > }
- * @type {Map<string, Card>}
- */
-const cards = new Map()
 
 const el = (tag = "div", props = {}, ...inner) => {
   const el = document.createElement(tag);
@@ -23,6 +18,7 @@ function show(el) {
 
 
 class Card {
+
   /**
    * 
    * @param {APIFile} file 
@@ -30,7 +26,7 @@ class Card {
   constructor(file) {
     this.prevFile = {}
     this.file = file
-    this.quality = file.quality
+    this.quality = file.quality || file.quality_options[0]
 
     const card = document.createElement('div');
     this.el = card
@@ -102,22 +98,22 @@ class Card {
     )
 
     this.elBtnCopy = el("button", { className: "icon-btn", title: "Copy link", onclick: () => copyToClipboard(file.source) }, "🔗")
-    this.elBtnDel = el("button", { className: "icon-btn del", title: "Remove", onclick: () => deleteJob(file.id) }, "✕")
+    this.elBtnDel = el("button", { className: "icon-btn del", title: "Remove", onclick: () => {
+      this.hide();
+      callDeleteFile(file.id).catch((e) => {
+        console.error(e)
+        this.show()
+      }).then(_=> update())
+    }}, "✕")
 
     this.elActStart = el("button", {
-      className: "icon-btn start", title: "Start download", onclick: () => {
-        file.download(this.quality)
-        update()
-      }
+      className: "icon-btn start", title: "Start download", onclick: () => this.startDownload()
     }, "▶")
     this.elActRedownload = el("button", {
-      className: "icon-btn redownload", title: "File missing — redownload", onclick: () => {
-        file.download(this.quality);
-        update()
-      }
+      className: "icon-btn redownload", title: "File missing — redownload", onclick: () => this.startDownload()
     }, "↺")
-    this.elBtnReveal = el("button", { className: "icon-btn reveal", title: "Show in Explorer", onclick: () => revealInExplorer(file.id) }, "📂")
-    
+    this.elBtnReveal = el("button", { className: "icon-btn reveal", title: "Show in Explorer", onclick: () => callRevealFile(file.id) }, "📂")
+
 
     const selectQuality = el("select", {
       className: "quality-select", style: "font-size:10px;padding:4px 6px;height:28px", onchange: e => {
@@ -143,6 +139,24 @@ class Card {
     this.el.append(inner, footer)
   }
 
+  static elementId(fileId) {
+    return `file-${fileId}`
+  }
+
+  async startDownload() {
+    const job = await this.file.download(this.quality)
+
+    this.render(job)
+  }
+
+  hide() {
+    this.el.style.display = "none"
+  }
+
+  show() {
+    this.el.style.display = null
+  }
+
   /**
    * 
    * @param {APIJob} job 
@@ -154,7 +168,7 @@ class Card {
     if (file.downloaded) status = 'done';
     if (job) status = job.status;
 
-    this.el.id = 'file-' + file.id;
+    this.el.id = Card.elementId(file.id)
     this.el.className = `job-card status-${status}`;
 
     this.elBadge.className = `status-badge badge-${status} job-badge`
@@ -214,4 +228,100 @@ class Card {
     }
 
   }
+}
+
+
+class CardManager extends Map {
+  constructor(containerId) {
+    super()
+    this.container = document.getElementById(containerId)
+
+    this._filters = new Map()
+    this._sorts = new Map()
+  }
+
+  // --- Card list manage --- //
+
+  getCardElement(fileId) {
+    return document.getElementById(Card.elementId(fileId))
+  }
+
+  /**
+   * @param {APIFile} file 
+   * @returns {Card}
+   */
+  createCard(file) {
+    const card = new Card(file)
+    this.set(file.id, card)
+    if (!this.getCardElement(file.id)) {
+      this.container.append(card.el)
+      
+      const isFiltered = this._filters.size ? [...this._filters.values()].every(fn => fn(card)) : false
+      if (isFiltered) card.hide()
+    
+      this.reorderFromList(this.getSortedList())
+    }
+    return card
+  }
+
+  /**
+   * @param {string} id 
+   */
+  removeCard(id) {
+    const card = this.get(id)
+    card.el.remove()
+    return this.delete(id)
+  }
+
+
+  // --- Sorts --- //
+  /**
+   * @returns {Card[]}
+   */
+  getSortedList() {
+    let list = [...this.values()]
+    this._sorts.forEach(fn => (list = list.sort(fn)))
+    return list
+  }
+
+  setSort(key, fn) {
+    this._sorts.set(key, fn)
+  }
+
+  clearSorts() {
+    this._sorts.clear()
+  }
+
+  /**
+   * Reorder DOM to match list (move each card to correct index position)
+   * @param {Card[]} list list of cards 
+   */
+  reorderFromList(list) {
+    list = list.filter(c => this.has(c.file.id))
+    
+    list.forEach((card, idx) => {
+      const current = this.container.children[idx];      
+      if (current !== card.el) this.container.insertBefore(card.el, current || null);
+    });
+  }
+
+  // --- Filters --- //
+  applyFilters() {
+    if (!this._filters.size) this.forEach(card => card.show())
+    const fns = [...this._filters.values()]
+    this.forEach(card => fns.every(fn => fn(card)) ? card.show() : card.hide())
+  }
+
+  setFilter(key, fn) {
+    this._filters.set(key, fn)
+  }
+
+  removeFilter(key) {
+    this._filters.delete(key)
+  }
+  
+  clearFilters() {
+    this._filters.clear()
+  }
+
 }

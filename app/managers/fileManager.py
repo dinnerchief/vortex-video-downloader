@@ -74,9 +74,12 @@ class FileManager:
 
         # Refresh downloaded status
         for l_file in os.listdir(vars.USER_DOWNLOAD_DIR):
+            if l_file.endswith(".part") or l_file.endswith(".tmp"): continue
+
             id = l_file.split("_")[0]
             file = self.get_file(id)
             if not file: continue
+            
             file.downloaded = True
 
 

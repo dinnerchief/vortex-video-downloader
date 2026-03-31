@@ -97,21 +97,24 @@ def api_delete_files():
     data = request.json or {}
     mode = data.get('mode', 'done')
     mode = 'done' if mode not in modes else mode
+    force = data.get('force', False)
 
     def remove(file_id):
-        files.remove_file(file_id, True)
+        files.remove_file(file_id, force)
         job_id = jobs.get_job_by_file(file_id)
         if job_id != None:
             jobs.remove_job(job_id)
 
+    file_ids = [file_id for file_id in files.files]
+
     counter = 0
     match mode:
         case "all":
-            for file_id in files.files:
+            for file_id in file_ids:
                 remove(file_id)
                 counter += 1
         case "done":
-            for file_id in files.files:
+            for file_id in file_ids:
                 file = files.get_file(file_id)
                 if file.downloaded:
                     remove(file_id)
@@ -122,7 +125,10 @@ def api_delete_files():
 
 @app.route('/api/files/<file_id>', methods=['DELETE'])
 def api_delete_file(file_id):
-    files.remove_file(file_id, True)
+    data = request.json or {}
+    force = data.get('force', False)
+
+    files.remove_file(file_id, force)
     job_id = jobs.get_job_by_file(file_id)
     if job_id != None:
         jobs.remove_job(job_id)
