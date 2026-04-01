@@ -276,6 +276,11 @@ document.addEventListener("DOMContentLoaded", async _ => {
   const sortType = document.getElementById("sortSelect").value
   handleSort(sortType)
 
+  handleFilterQuery(document.getElementById("filterSearch").value)
+  // apply filter immediately
+  clearTimeout(delayQuery)
+  cards.applyFilters()
+
   setInterval(async () => {
     await update()
   }, 1000)
