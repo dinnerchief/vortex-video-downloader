@@ -144,8 +144,8 @@ def api_reveal(file_id):
         return jsonify({'error': 'No file'}), 404
     fp = file.filepath()
     try:
-        import suapirocess
-        suapirocess.Popen(['explorer', '/select,', fp])
+        import subprocess
+        subprocess.Popen(['explorer', '/select,', fp])
         return jsonify({'ok': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
