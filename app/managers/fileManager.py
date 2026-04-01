@@ -29,7 +29,7 @@ class File:
         self.quality_options = quality_options
 
     def filepath(self):
-        return os.path.join(vars.USER_DOWNLOAD_DIR, f"{self.id}_{self.filename}")
+        return os.path.join(vars.USER_DOWNLOAD_DIR, f"{self.id}_{self.title}.mp4")
 
     def remove_locally(self):
         fp = self.filepath()
