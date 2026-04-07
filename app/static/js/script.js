@@ -1,13 +1,3 @@
-/**
- * @type {Map<string, APIJob>}
- */
-let jobs = new Map();         // job_id → job obj
-
-/**
- * { Record< file_id , job_id > }
- * @type {Record<string, string>}
- */
-let _index_file_job = {}
 
 const cards = new CardManager("jobList")
 
@@ -123,21 +113,9 @@ async function update() {
     if (!values.has(k)) {
       cards.removeCard(k)
       cards.delete(k)
+      return
     }
-  })
-
-  _index_file_job = {}
-  jobs.clear()
-  Object.values(data.jobs)
-    .forEach(v => {
-      const job = new APIJob(v)
-      jobs.set(job.id, job)
-      _index_file_job[job.file_id] = job.id
-    })
-
-  cards.forEach(v => {
-    const job = jobs.get(_index_file_job[v.file.id])
-    v.render(job)
+    card.render()
   })
 
   count.textContent = cards.size;
@@ -148,9 +126,9 @@ async function update() {
 
 function startAll() {
   cards.forEach(async card => {
-    if (card.file.downloaded) return
-    const job = await card.file.download()
-    card.render(job)
+    if (card.file.downloaded) return;
+    await card.file.download()
+    card.render()
   })
 }
 
@@ -184,15 +162,13 @@ async function handleFetch() {
   }
 }
 
-const cardStatus = card => _index_file_job[card.file.id] ? jobs.get(_index_file_job[card.file.id]).status : card.file.downloaded ? 'done' : 'queued'
-
 const sortByCreatedAtASC = (a, b) => (a.file.created_at || 0) - (b.file.created_at || 0) 
 const sortByCreatedAtDESC = (a, b) => (b.file.created_at || 0) - (a.file.created_at || 0) 
 const sortByTitleASC = (a, b) => (a.file.title || '').localeCompare(b.file.title || '')
 const sortByTitleDESC = (a, b) => (b.file.title || '').localeCompare(a.file.title || '') 
 const sortByStatus = (a, b) => {
   const order = { downloading: 0, queued: 1, error: 2, done: 3 };
-  return (order[cardStatus(a)] || 9) - (order[cardStatus(b)] || 9);
+  return (order[a.file.status] || 9) - (order[b.file.status] || 9);
 }
 
 let delayQuery = null
@@ -217,7 +193,7 @@ function handleFilterStatus(btn, status) {
     cards.applyFilters()
     return
   }
-  cards.setFilter("status", (card) => cardStatus(card) == status)
+  cards.setFilter("status", (card) => card.file.status == status)
   cards.applyFilters()
 }
 
@@ -282,6 +258,7 @@ document.addEventListener("DOMContentLoaded", async _ => {
   cards.applyFilters()
 
   setInterval(async () => {
+    if (![...cards.values()].find(c => ['downloading', 'done', 'error'].includes(c.file.status))) return
     await update()
   }, 1000)
 })

@@ -67,7 +67,7 @@ class Card {
     this.elError = el("span", "", "ERROR")
     this.elError.style = "color:var(--accent3);"
 
-    this.elQuality = el("span", "", "1080p")
+    this.elQuality = el("span", "", "best")
 
     this.elMetaDownloading = el("div", "", this.elSpeed, elSep, elEtaWrap)
 
@@ -144,9 +144,9 @@ class Card {
   }
 
   async startDownload() {
-    const job = await this.file.download(this.quality)
-
-    this.render(job)
+    this.file.status = 'downloading'
+    this.render()
+    return await this.file.download(this.quality)
   }
 
   hide() {
@@ -157,16 +157,9 @@ class Card {
     this.el.style.display = null
   }
 
-  /**
-   * 
-   * @param {APIJob} job 
-   */
-  render(job) {
+  render() {
     const file = this.file
-
-    let status = 'queued';
-    if (file.downloaded) status = 'done';
-    if (job) status = job.status;
+    const status = file.status;
 
     this.el.id = Card.elementId(file.id)
     this.el.className = `job-card status-${status}`;
@@ -184,14 +177,14 @@ class Card {
       this.thumbnail = file.thumbnail
       this.elThumbImg.src = file.thumbnail
     }
-
-    if (job) {
-      this.elEta.textContent = job.eta
-      this.elSpeed.textContent = job.speed
-      this.elEta.textContent = job.eta
-      this.elError.textContent = job.error
-      this.elPct.textContent = job.progress + "%"
-      this.elPrgsFill.style.width = job.progress + "%"
+    
+    if (['done', 'error', 'downloading'].includes(status)) {
+      this.elEta.textContent = file.eta
+      this.elSpeed.textContent = file.speed
+      this.elEta.textContent = file.eta
+      this.elError.textContent = file.error
+      this.elPct.textContent = file.progress + "%"
+      this.elPrgsFill.style.width = file.progress + "%"
     }
 
     hide(this.elError)
@@ -203,15 +196,18 @@ class Card {
     hide(this.elBtnReveal)
     hide(this.elActStart)
     hide(this.elPlayOverlay)
+    hide(this.elSlotQuality)
 
     switch (status) {
       case "queued":
         show(this.elActStart)
+        show(this.elSlotQuality)
         break;
       case "error":
         show(this.elError)
         show(this.elActRedownload)
         show(this.elPrgsWrap)
+        show(this.elSlotQuality)
         break
       case "done":
         show(this.elPlayOverlay)

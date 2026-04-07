@@ -1,11 +1,7 @@
 import os
 import json
-import uuid
-import threading
-import time
 from flask import Flask, request, jsonify, send_file, send_from_directory, Response
-import yt_dlp
-from managers import FileManager, JobManager, File
+from managers import FileManager, File
 
 import vars
 
@@ -13,7 +9,6 @@ app = Flask(__name__, static_folder='static', static_url_path="/static")
 
 
 # In-memory job store: {job_id: {...}}
-jobs = JobManager()
 files = FileManager()
 
 
@@ -22,7 +17,6 @@ def save_state():
         'proxy': vars.PROXY,
         'download_dir': vars.USER_DOWNLOAD_DIR,
         'cookie_file': vars.COOKIE_FILE,
-        'jobs': jobs.json(),
         'files': files.json()
     }
     try:
@@ -58,14 +52,7 @@ def load_state():
 
             files.files[f.id] = f
 
-        for job in state.get('jobs', []):
-            file = files.get_file(job.get("file_id"))
-            if file is None: continue
-
-            j = jobs.create_job(file)
-            j.set_error("Interrupted (app was restarted)")
-        
-        print(f'[vortex] State restored: {len(jobs)} jobs, proxy={vars.PROXY!r}, dir={vars.USER_DOWNLOAD_DIR}')
+        print(f'[vortex] State restored: {len(files)} files, proxy={vars.PROXY!r}, dir={vars.USER_DOWNLOAD_DIR}')
     except Exception as e:
         print(f'[vortex] Failed to load state: {e}')
 
@@ -99,25 +86,20 @@ def api_delete_files():
     mode = 'done' if mode not in modes else mode
     force = data.get('force', False)
 
-    def remove(file_id):
-        files.remove_file(file_id, force)
-        job_id = jobs.get_job_by_file(file_id)
-        if job_id != None:
-            jobs.remove_job(job_id)
-
     file_ids = [file_id for file_id in files.files]
 
     counter = 0
     match mode:
         case "all":
             for file_id in file_ids:
-                remove(file_id)
+                file = files.get_file(file_id)
+                files.remove_file(file, force)
                 counter += 1
         case "done":
             for file_id in file_ids:
                 file = files.get_file(file_id)
                 if file.downloaded:
-                    remove(file_id)
+                    files.remove_file(file, force)
                     counter += 1
 
     save_state()
@@ -128,10 +110,11 @@ def api_delete_file(file_id):
     data = request.json or {}
     force = data.get('force', False)
 
-    files.remove_file(file_id, force)
-    job_id = jobs.get_job_by_file(file_id)
-    if job_id != None:
-        jobs.remove_job(job_id)
+    file = files.get_file(file_id)
+    if file is None:
+        return jsonify({'error': 'File not found'}), 404
+
+    files.remove_file(file, force)
 
     save_state()
     return jsonify({'ok': True})
@@ -167,38 +150,28 @@ def api_download(file_id):
     data = request.json or {}
     quality = data.get('quality', 'best')
 
-    # url = (data.get('url') or '').strip()
-    # quality_options = data.get('quality_options', ['best'])
-    # title = data.get('title', 'Unknown')
-    # thumbnail = data.get('thumbnail', '')
-
-    # if not url:
-    #     return jsonify({'error': 'No URL provided'}), 400
-
     file = files.get_file(file_id)
     if file is None:
-        return jsonify({'error': 'File not found'}), 400
+        return jsonify({'error': 'File not found'}), 404
 
-    job = jobs.get_job(jobs.get_job_by_file(file_id))
-    if job and job.status == vars.STATUS.ERROR.value:
-        jobs.remove_job(job.id)
-    elif job:
+    if file.status == vars.STATUS.DOWNLOADING:
         return jsonify({'error': 'Has an active job for this file'}), 403
 
-    file.quality = quality
-
     if file.downloaded:
-        files.remove_file(file_id)
+        files.remove_file(file)
 
-    job = jobs.create_job(file)
-    job.download(quality)
+    files.download(file, quality)
 
     save_state()
-    return jsonify({'job_id': job.id})
+    return jsonify({'ok': True})
 
-@app.route('/api/jobs/<job_id>', methods=['DELETE'])
-def api_cancel_job(job_id: str):
-    jobs.remove_job(job_id)
+@app.route('/api/files/<file_id>/cancel', methods=['POST'])
+def api_cancel_job(file_id: str):
+    file = files.get_file(file_id)
+    if not file:
+        return jsonify({'error': 'File not found'}), 404
+
+    file.cancel()
 
     save_state()
     return jsonify({ 'ok': True })
@@ -207,20 +180,9 @@ def api_cancel_job(job_id: str):
 def api_update():
     files.sync_local_files()
 
-    # clear jobs with status 'done'
-    for id in files.files:
-        file = files.get_file(id)
-        if not file.downloaded: continue
-
-        job_id = jobs.get_job_by_file(file.id)
-        job = jobs.get_job(job_id)
-        if job and job.status == vars.STATUS.DONE.value:
-            jobs.remove_job(job_id)
 
     save_state()
-
     return jsonify({
-        "jobs": jobs.json(),
         "files": files.json()
     })
 

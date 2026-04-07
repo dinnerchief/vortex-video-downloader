@@ -3,15 +3,13 @@
  * 
  * @param {string} file_id 
  * @param {string} quality 
- * @returns APIJob
  */
 async function callFileDownload(file_id, quality) {
-  const data = await fetch(`/api/files/${file_id}/download`, {
+  return await fetch(`/api/files/${file_id}/download`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ quality }),
   }).then(res => res.json());
-  return new APIJob(data)
 }
 
 async function callFetchFile(url) {
@@ -22,8 +20,8 @@ async function callFetchFile(url) {
   }).then(res => res.json());
 }
 
-async function callCancelJob(job_id) {
-  return await fetch(`/api/jobs/${job_id}`, { method: "DELETE" })
+async function callCancel(file_id) {
+  return await fetch(`/api/files/${file_id}/cancel`, { method: "POST" })
     .then(res => res.json());
 }
 
@@ -66,6 +64,12 @@ class APIFile {
     this.created_at = raw.created_at
     this.downloaded = raw.downloaded
     this.quality = raw.quality
+    
+    this.error = raw.error
+    this.eta = raw.eta
+    this.speed = raw.speed
+    this.status = raw.status
+    this.progress = raw.progress
 
     this.description = raw.description || ''
   }
@@ -76,19 +80,4 @@ class APIFile {
     return data
   }
 
-}
-
-class APIJob {
-  constructor(raw) {
-    this.id = raw.id
-    this.eta = raw.eta
-    this.url = raw.url
-    this.error = raw.error
-    this.speed = raw.speed
-    this.status = raw.status
-    this.file_id = raw.file_id
-    this.quality = raw.quality
-    this.filename = raw.filename
-    this.progress = raw.progress
-  }
 }
