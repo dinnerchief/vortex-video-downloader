@@ -33,9 +33,12 @@ class Card {
 
 
     this.elThumbImg = el("img")
-    this.elThumbImg.addEventListener("error", function (e) { this.parentElement && (this.parentElement.style.display = "none") })
     this.elThumbImg.src = file.thumbnail
     this.elThumbImg.style = "width:100%;height:100%;object-fit:cover;display:block"
+
+    this.elNoThumbImg = el("div", {
+      style: "width:100%;height:160px;background:var(--bg);align-items:center;justify-content:center;font-size:32px;color:var(--text3);display:none;user-select:none;"
+    }, "🎬")
 
     this.elPlayOverlay = el("div", "play-overlay",
       el("div", "play-overlay-btn", "▶")
@@ -46,8 +49,10 @@ class Card {
     this.elOpenThumb.title = "View thumbnail"
     this.elOpenThumb.addEventListener("click", e => (e.stopPropagation(), openLightbox(this.file.thumbnail)))
 
-    this.elThumb = el("div", "job-thumb", this.elThumbImg, this.elOpenThumb, this.elPlayOverlay)
-    this.elThumb.style = "position:relative;width:100%;height:160px;overflow:hidden;flex-shrink:0;cursor:pointer"
+    this.elThumbImg.addEventListener("error", (e) => { this.elNoThumbImg.style.display = "flex"; hide(this.elThumbImg) })
+
+    this.elThumb = el("div", "job-thumb", this.elThumbImg, this.elNoThumbImg, this.elOpenThumb, this.elPlayOverlay)
+    this.elThumb.style = "position:relative;width:100%;height:160px;overflow:hidden;flex-shrink:0;"
     this.elThumb.addEventListener("click", () => file.downloaded && openPlayer(file.id))
 
     this.elTitle = el("div", "job-title", esc(file.title || file.source))
@@ -98,13 +103,15 @@ class Card {
     )
 
     this.elBtnCopy = el("button", { className: "icon-btn", title: "Copy link", onclick: () => copyToClipboard(file.source) }, "🔗")
-    this.elBtnDel = el("button", { className: "icon-btn del", title: "Remove", onclick: () => {
-      this.hide();
-      callDeleteFile(file.id).catch((e) => {
-        console.error(e)
-        this.show()
-      }).then(_=> update())
-    }}, "✕")
+    this.elBtnDel = el("button", {
+      className: "icon-btn del", title: "Remove", onclick: () => {
+        this.hide();
+        callDeleteFile(file.id).catch((e) => {
+          console.error(e)
+          this.show()
+        }).then(_ => update())
+      }
+    }, "✕")
 
     this.elActStart = el("button", {
       className: "icon-btn start", title: "Start download", onclick: () => this.startDownload()
@@ -177,7 +184,7 @@ class Card {
       this.thumbnail = file.thumbnail
       this.elThumbImg.src = file.thumbnail
     }
-    
+
     if (['done', 'error', 'downloading'].includes(status)) {
       this.elEta.textContent = file.eta
       this.elSpeed.textContent = file.speed
@@ -198,6 +205,8 @@ class Card {
     hide(this.elPlayOverlay)
     hide(this.elSlotQuality)
 
+    this.elThumb.style.cursor = null
+
     switch (status) {
       case "queued":
         show(this.elActStart)
@@ -214,6 +223,7 @@ class Card {
         show(this.elQuality)
         show(this.elBtnReveal)
         show(this.elPrgsWrap)
+        this.elThumb.style.cursor = "pointer"
         this.elPrgsFill.style.width = "100%"
         break
       case "downloading":
@@ -251,10 +261,10 @@ class CardManager extends Map {
     this.set(file.id, card)
     if (!this.getCardElement(file.id)) {
       this.container.append(card.el)
-      
+
       const isFiltered = this._filters.size ? [...this._filters.values()].every(fn => fn(card)) : false
       if (isFiltered) card.hide()
-    
+
       this.reorderFromList(this.getSortedList())
     }
     return card
@@ -294,9 +304,9 @@ class CardManager extends Map {
    */
   reorderFromList(list) {
     list = list.filter(c => this.has(c.file.id))
-    
+
     list.forEach((card, idx) => {
-      const current = this.container.children[idx];      
+      const current = this.container.children[idx];
       if (current !== card.el) this.container.insertBefore(card.el, current || null);
     });
   }
@@ -315,7 +325,7 @@ class CardManager extends Map {
   removeFilter(key) {
     this._filters.delete(key)
   }
-  
+
   clearFilters() {
     this._filters.clear()
   }

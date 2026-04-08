@@ -234,15 +234,17 @@ async function clearDone() {
   await callDeleteFilesWithMode("done").catch(e => {
     console.error(e)
     cards.applyFilters()
-  }).then(() => update())
+  })
+  await update()
 }
 
 async function clearAll() {
   cards.forEach(card => card.hide())
-  await callDeleteFilesWithMode("done").catch(e => {
+  await callDeleteFilesWithMode("all").catch(e => {
     console.error(e)
     cards.applyFilters()
-  }).then(() => update())
+  })
+  await update()
 }
 
 
