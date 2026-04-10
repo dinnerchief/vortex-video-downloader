@@ -33,7 +33,7 @@ class Card {
 
 
     this.elThumbImg = el("img")
-    this.elThumbImg.src = file.thumbnail
+    this.elThumbImg.src = `/api/files/${file.id}/thumb`
     this.elThumbImg.style = "width:100%;height:100%;object-fit:cover;display:block"
 
     this.elNoThumbImg = el("div", {
@@ -47,7 +47,7 @@ class Card {
     this.elOpenThumb = el("button", "thumb-img-btn")
     this.elOpenThumb.innerHTML = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="10" height="10" rx="1" stroke="currentColor" stroke-width="1.2"/><circle cx="4" cy="4" r="1.2" fill="currentColor"/><path d="M1 8l3-3 2 2 2-2.5L11 8" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>`
     this.elOpenThumb.title = "View thumbnail"
-    this.elOpenThumb.addEventListener("click", e => (e.stopPropagation(), openLightbox(this.file.thumbnail)))
+    this.elOpenThumb.addEventListener("click", e => (e.stopPropagation(), openLightbox(`/api/files/${file.id}/thumb`)))
 
     this.elThumbImg.addEventListener("error", (e) => { this.elNoThumbImg.style.display = "flex"; hide(this.elThumbImg) })
 
@@ -180,10 +180,10 @@ class Card {
     this.elSite.innerHTML = siteBadgeHtml(file.site, file.source)
     this.elTitle.textContent = esc(file.title || file.source)
 
-    if (this.thumbnail != file.thumbnail) {
-      this.thumbnail = file.thumbnail
-      this.elThumbImg.src = file.thumbnail
-    }
+    // if (this.thumbnail != file.thumbnail) {
+    //   this.thumbnail = file.thumbnail
+    //   this.elThumbImg.src = file.thumbnail
+    // }
 
     if (['done', 'error', 'downloading'].includes(status)) {
       this.elEta.textContent = file.eta

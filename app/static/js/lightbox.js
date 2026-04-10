@@ -17,15 +17,18 @@ async function saveLightboxImage() {
   const src = document.getElementById('lightboxImg').src;
   if (!src) return;
   try {
-    const res = await fetch(src);
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
+    // const res = await fetch(src);
+    // const blob = await res.blob();
+    // const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url;
-    a.download = 'thumbnail.jpg';
+    a.href = src;
+    a.download = '';
     a.click();
-    URL.revokeObjectURL(url);
-  } catch { toast('Failed to save image', 'error'); }
+    // URL.revokeObjectURL(url);
+  } catch(e) {
+    console.error(e);
+    toast('Failed to save image', 'error');
+  }
 }
 async function copyLightboxImage() {
   const src = document.getElementById('lightboxImg').src;
@@ -35,6 +38,9 @@ async function copyLightboxImage() {
     const blob = await res.blob();
     await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
     toast('Image copied to clipboard', 'success');
-  } catch { toast('Failed to copy image', 'error'); }
+  } catch(e) {
+    console.error(e);
+    toast('Failed to copy image', 'error');
+  }
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });

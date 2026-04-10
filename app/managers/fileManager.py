@@ -231,12 +231,13 @@ class FileManager:
 
     return True
 
-  def fetch_and_save(self, url: str) -> File:
+  def fetch(self, url: str) -> File:
     """Fetch video info without downloading."""
   
     opts = {
       'quiet': True,
       'no_warnings': True,
+      'listformats': True,
       'skip_download': True,
       'proxy': vars.PROXY,
       **({'cookiefile': vars.COOKIE_FILE} if vars.COOKIE_FILE and os.path.exists(vars.COOKIE_FILE) else {}),
@@ -284,8 +285,11 @@ class FileManager:
         info.get('thumbnail', ''),
         quality_options
       )
-      self.files[file.id] = file
+
       return file
+    
+  def save(self, file: File):
+      self.files[file.id] = file
   
   def json(self):
     return [self.files[id].json() for id in self.files]

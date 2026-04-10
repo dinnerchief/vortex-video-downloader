@@ -146,8 +146,8 @@ async function handleFetch() {
     if (data.error) throw new Error(data.error || 'Failed to fetch info');
 
     const file = new APIFile(data)
-    const card = cards.createCard(file)
-    card.render()
+
+    await update()
 
     toast(`Added: ${file.title.slice(0, 40)}...`, 'success');
 
@@ -260,7 +260,7 @@ document.addEventListener("DOMContentLoaded", async _ => {
   cards.applyFilters()
 
   setInterval(async () => {
-    if (![...cards.values()].find(c => ['downloading', 'done', 'error'].includes(c.file.status))) return
+    if (![...cards.values()].find(c => ['downloading'].includes(c.file.status))) return
     await update()
   }, 1000)
 })

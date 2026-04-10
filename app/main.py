@@ -1,9 +1,11 @@
-import os
-import json
 from flask import Flask, request, jsonify, send_file, send_from_directory, Response
 from managers import FileManager, File
+from utils import format_filename
 
+import os
 import vars
+import json
+import urllib
 
 app = Flask(__name__, static_folder='static', static_url_path="/static")
 
@@ -70,7 +72,37 @@ def api_fetch():
     if not url:
         return jsonify({'error': 'No URL provided'}), 400
     try:
-        file = files.fetch_and_save(url)
+        file = files.fetch(url)
+
+        if file.thumbnail:
+            try:
+                thumb_dir = os.path.join(vars.USER_DOWNLOAD_DIR, ".thumbnails")
+                if not os.path.exists(thumb_dir):
+                    os.mkdir(thumb_dir)
+
+                proxy_handler = urllib.request.ProxyHandler({
+                    "http": vars.PROXY,
+                    "https": vars.PROXY,
+                })
+                opener = urllib.request.build_opener(proxy_handler)
+                urllib.request.install_opener(opener)
+                req = urllib.request.Request(file.thumbnail, headers={
+                    'User-Agent': vars.USER_AGENT,
+                })
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    data = resp.read()
+                    type = resp.headers.get('Content-Type', '').lower()
+                    if type.startswith("image/"):
+                        with open(os.path.join(thumb_dir, f"{file.id}.{type.split(";")[0].split('/')[-1]}"), "wb") as f:
+                            f.write(data)
+                    else:
+                        print(f"WARN: [file-{file.id}] thumbnail does not contain MIME type of image: {file.thumbnail}")
+                        # file.thumbnail = None
+            except e:
+                print(f"ERROR: Unable to download thumbnail from \"{file.thumbnail}\":", e)
+        
+        files.save(file)
+
         save_state()
         return jsonify(file.json())
     except Exception as e:
@@ -304,8 +336,14 @@ def api_thumb():
     
     try:
         import urllib.request
+        proxy_handler = urllib.request.ProxyHandler({
+            "http": vars.PROXY,
+            "https": vars.PROXY,
+        })
+        opener = urllib.request.build_opener(proxy_handler)
+        urllib.request.install_opener(opener)
         req = urllib.request.Request(url, headers={
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            'User-Agent': vars.USER_AGENT,
         })
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = resp.read()
@@ -316,18 +354,33 @@ def api_thumb():
     
     except Exception as e:
         return str(e), 502
+    
+    
+@app.route('/api/files/<file_id>/thumb')
+def api_file_thumb(file_id):
+    file = files.get_file(file_id)
+    if file is None:
+        return jsonify({'error': 'File not found'}), 404
+    
+    try:
+        thumb_dir = os.path.join(vars.USER_DOWNLOAD_DIR, ".thumbnails")
+        for filename in os.listdir(thumb_dir):
+            if not filename.startswith(file_id): continue
 
-# @app.route('/api/quality/<job_id>', methods=['POST'])
-# def api_quality(job_id):
-#     job = get_job(job_id)
-#     if not job:
-#         return jsonify({'error': 'Not found'}), 404
-#     if job.get('status') not in ('queued', 'error'):
-#         return jsonify({'error': 'Can only change quality when queued'}), 400
-#     quality = (request.json or {}).get('quality', 'best')
-#     update_job(job_id, quality=quality)
-#     save_state()
-#     return jsonify({'ok': True})
+            ext = filename.split(os.path.extsep)[-1]
+            mimetype = f"image/{ext}"
+            if ext == 'webp': mimetype = "image/png"
+
+            return send_file(
+                os.path.join(thumb_dir, filename),
+                mimetype=mimetype,
+                download_name=format_filename(file.title, keep_ext=False),
+                as_attachment=True
+            )
+
+        return Response(), 404
+    except Exception as e:
+        return str(e), 502
 
 
 if __name__ == '__main__':
