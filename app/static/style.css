@@ -1103,10 +1103,20 @@ video#mainVideo {
   align-items: center;
   justify-content: center;
   cursor: zoom-out;
-  transition: background .25s ease;
+  transition: background .25s ease, opacity .25s ease;
 }
 .lightbox-bg.open { display: flex; }
 .lightbox-bg.visible { background: rgba(0,0,0,.88); }
+
+.lightbox-bg .wrapper {
+  transition: transform .3s cubic-bezier(.175,.885,.32,1.275), opacity .2s ease;
+  transform: scale(0.4);
+  opacity: 0;
+}
+.lightbox-bg.visible .wrapper {
+  transform: scale(1);
+  opacity: 1;
+}
 
 .lightbox-bg img {
   max-width: 90vw;
@@ -1114,13 +1124,6 @@ video#mainVideo {
   border-radius: var(--radius);
   box-shadow: 0 0 80px rgba(0,0,0,.9);
   cursor: default;
-  transform: scale(0.4);
-  opacity: 0;
-  transition: transform .3s cubic-bezier(.175,.885,.32,1.275), opacity .2s ease;
-}
-.lightbox-bg.visible img {
-  transform: scale(1);
-  opacity: 1;
 }
 
 
