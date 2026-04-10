@@ -77,6 +77,7 @@ class APIFile {
   async download(quality) {
     const data = await callFileDownload(this.id, quality)
     if (data.error) throw new Error(data.error)
+    this.status = 'downloading'
     return data
   }
 

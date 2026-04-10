@@ -98,7 +98,7 @@ def api_fetch():
                     else:
                         print(f"WARN: [file-{file.id}] thumbnail does not contain MIME type of image: {file.thumbnail}")
                         # file.thumbnail = None
-            except e:
+            except Exception as e:
                 print(f"ERROR: Unable to download thumbnail from \"{file.thumbnail}\":", e)
         
         files.save(file)
