@@ -9,6 +9,7 @@ import urllib
 import uuid
 import json
 import time
+import sys
 import os
 
 import vars
@@ -233,7 +234,7 @@ class FileManager:
       downloader_file = str(Path(__file__).resolve().parents[1] / "downloader.py")
       try:
         proc = await asyncio.create_subprocess_exec(
-          "python3", "-u", downloader_file, file.source, json.dumps(opts),
+          sys.executable, "-u", downloader_file, file.source, json.dumps(opts),
           stdout=asyncio.subprocess.PIPE,
           stderr=asyncio.subprocess.STDOUT,
         )
