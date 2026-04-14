@@ -103,6 +103,25 @@ class FileManager:
     del self.files[file.id]
     return True
 
+  def remove_cache(self):
+    
+    # Remove YTDL part files
+    for filename in os.listdir(vars.USER_DOWNLOAD_DIR):
+      ext = filename.split(os.path.extsep)[-1]
+      id = filename.split("_")[0]
+      file = self.get_file(id)
+
+      if ext in ['part', 'ytdl']:
+        if file and file.status == vars.STATUS.DOWNLOADING: continue
+        os.remove(os.path.join(vars.USER_DOWNLOAD_DIR, filename))
+
+    # Remove orphan thumbnails
+    thumb_dir = self.thumbnail_path()
+    for filename in thumb_dir:
+      id = filename.split(".")[0]
+      if not self.get_file(id):
+        os.remove(os.path.join(thumb_dir, filename))
+
   def thumbnail_path(self, file_id: str | None = None):
     thumb_dir = os.path.join(vars.USER_DOWNLOAD_DIR, ".thumbnails")
 
