@@ -74,32 +74,7 @@ def api_fetch():
     try:
         file = files.fetch(url)
 
-        if file.thumbnail:
-            try:
-                thumb_dir = os.path.join(vars.USER_DOWNLOAD_DIR, ".thumbnails")
-                if not os.path.exists(thumb_dir):
-                    os.mkdir(thumb_dir)
-
-                proxy_handler = urllib.request.ProxyHandler({
-                    "http": vars.PROXY,
-                    "https": vars.PROXY,
-                })
-                opener = urllib.request.build_opener(proxy_handler)
-                urllib.request.install_opener(opener)
-                req = urllib.request.Request(file.thumbnail, headers={
-                    'User-Agent': vars.USER_AGENT,
-                })
-                with urllib.request.urlopen(req, timeout=10) as resp:
-                    data = resp.read()
-                    type = resp.headers.get('Content-Type', '').lower()
-                    if type.startswith("image/"):
-                        with open(os.path.join(thumb_dir, f"{file.id}.{type.split(";")[0].split('/')[-1]}"), "wb") as f:
-                            f.write(data)
-                    else:
-                        print(f"WARN: [file-{file.id}] thumbnail does not contain MIME type of image: {file.thumbnail}")
-                        # file.thumbnail = None
-            except Exception as e:
-                print(f"ERROR: Unable to download thumbnail from \"{file.thumbnail}\":", e)
+        if file.thumbnail: files.download_thumbnail(file)
         
         files.save(file)
 
@@ -211,6 +186,7 @@ def api_cancel_job(file_id: str):
 @app.route('/api/update')
 def api_update():
     files.sync_local_files()
+    files.sync_thumbnails()
 
 
     save_state()

@@ -5,6 +5,7 @@ from pathlib import Path
 
 import threading
 import asyncio 
+import urllib
 import uuid
 import json
 import time
@@ -15,7 +16,6 @@ import utils
 
 class File:
   title = ''
-  thumbnail = ''
   source = ''
   site = ''
   quality_options: list[str] = []
@@ -31,6 +31,8 @@ class File:
 
   process: asyncio.subprocess.Process | None = None
 
+  thumbnail = ''
+  thumbnail_error = None
 
   def __init__(self, source, filename, title, thumbnail, quality_options):
     self.created_at = time.time()
@@ -63,6 +65,7 @@ class File:
       "title": self.title,
       "source": self.source,
       "thumbnail": self.thumbnail,
+      "thumbnail_error": self.thumbnail_error,
       "quality_options": self.quality_options,
       "filename": self.filename,
       "filepath": self.filepath(),
@@ -99,6 +102,66 @@ class FileManager:
 
     del self.files[file.id]
     return True
+
+  def thumbnail_path(self, file_id: str | None = None):
+    thumb_dir = os.path.join(vars.USER_DOWNLOAD_DIR, ".thumbnails")
+
+    if not os.path.exists(thumb_dir):
+      os.mkdir(thumb_dir)
+
+    if file_id:
+      for f in os.listdir(thumb_dir):
+        if not f.startswith(file_id): continue
+        return os.path.join(thumb_dir, f)
+      return None
+
+    return thumb_dir
+  
+  def download_thumbnail(self, file: File):
+    thumb_dir = self.thumbnail_path()
+
+    try:
+      proxy_handler = urllib.request.ProxyHandler({
+        "http": vars.PROXY,
+        "https": vars.PROXY,
+      })
+      opener = urllib.request.build_opener(proxy_handler)
+      urllib.request.install_opener(opener)
+      req = urllib.request.Request(file.thumbnail, headers={
+        'User-Agent': vars.USER_AGENT,
+      })
+      print(f"[file-{file.id}] Started downloading a thumbnail")
+      with urllib.request.urlopen(req, timeout=10) as resp:
+        data = resp.read()
+        type = resp.headers.get('Content-Type', '').lower()
+        if type.startswith("image/"):
+          # format: image/png; filename=filename.png; ...
+          ext = type.split(";")[0].split('/')[-1]
+          with open(os.path.join(thumb_dir, f"{file.id}.{ext}"), "wb") as f:
+            f.write(data)
+        else:
+          type = type or '<empty string>'
+          print(f"WARN: [file-{file.id}] thumbnail does not contain MIME type of image: MIME={type} url={file.thumbnail}")
+          file.thumbnail_error = f"thumbnail does not contain MIME type of image: MIME={type}"
+          return False
+    except Exception as e:
+      print(f"ERROR: Unable to download thumbnail from \"{file.thumbnail}\":", e)
+      file.thumbnail_error = str(e)
+      return False
+    
+    return True
+      
+  def sync_thumbnails(self):
+    threads: list[threading.Thread] = [] 
+    for id in self.files:
+      file = self.get_file(id)
+      path = self.thumbnail_path(id)
+      if file.thumbnail_error or path: continue
+      t = threading.Thread(target=self.download_thumbnail, args=(file,))
+      threads.append(t)
+      t.start()
+    for thread in threads:
+      thread.join()
 
   def sync_local_files(self):
     # Reset downloaded status
@@ -254,7 +317,6 @@ class FileManager:
       filename = ydl.prepare_filename(info)
 
       formats = info.get('formats', [])
-      # print(formats)
       # Build quality options
       quality_set = set()
       for f in formats:
@@ -264,19 +326,6 @@ class FileManager:
       quality_options = sorted(quality_set, key=lambda x: int(x.replace('p','')), reverse=True)
       if not quality_options:
         quality_options = ['best']
-
-      # data = {
-      #   'type': 'video',
-      #   'title': info.get('title', 'Unknown Title'),
-      #   'thumbnail': info.get('thumbnail', ''),
-      #   'duration': info.get('duration', 0),
-      #   'uploader': info.get('uploader', ''),
-      #   'view_count': info.get('view_count', 0),
-      #   'description': (info.get('description') or '')[:300],
-      #   'quality_options': quality_options,
-      #   'webpage_url': info.get('webpage_url', url),
-      #   'extractor': info.get('extractor_key', ''),
-      # }
 
       file = File(
         url, 
