@@ -126,6 +126,32 @@ def api_delete_file(file_id):
     save_state()
     return jsonify({'ok': True})
 
+@app.route('/api/files/<file_id>/refetch', methods=['POST'])
+def api_refetch_file(file_id):
+    file = files.get_file(file_id)
+
+    if not file:
+        return jsonify({'error': 'File not found'}), 404
+
+    try:
+        new_file = files.fetch(file.source)
+
+        file.quality_options = new_file.quality_options
+        file.title = new_file.title
+
+        if file.thumbnail != new_file.thumbnail:
+            thumb_file = files.thumbnail_path(file.id)
+            if thumb_file:
+                os.remove(thumb_file)
+            file.thumbnail = new_file.thumbnail
+            file.thumbnail_error = None
+            files.download_thumbnail(file) 
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+    return jsonify(file.json())
+
 @app.route('/api/files/<file_id>/reveal', methods=['POST'])
 def api_reveal(file_id):
     """Open the file's folder in Windows Explorer with the file selected."""
