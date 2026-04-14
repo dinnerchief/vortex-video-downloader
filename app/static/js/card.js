@@ -72,7 +72,7 @@ class Card {
     this.elError = el("span", "", "ERROR")
     this.elError.style = "color:var(--accent3);"
 
-    this.elQuality = el("span", "", "best")
+    this.elQuality = el("span", "", this.quality)
 
     this.elMetaDownloading = el("div", "", this.elSpeed, elSep, elEtaWrap)
 
@@ -206,6 +206,7 @@ class Card {
     hide(this.elSlotQuality)
 
     this.elThumb.style.cursor = null
+    this.elQuality.textContent = this.quality
 
     switch (status) {
       case "queued":
