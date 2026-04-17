@@ -141,12 +141,14 @@ class FileManager:
     thumb_dir = self.thumbnail_path()
 
     try:
-      proxy_handler = urllib.request.ProxyHandler({
-        "http": vars.PROXY,
-        "https": vars.PROXY,
-      })
-      opener = urllib.request.build_opener(proxy_handler)
-      urllib.request.install_opener(opener)
+      if vars.PROXY:
+        proxy_handler = urllib.request.ProxyHandler({
+          "http": vars.PROXY,
+          "https": vars.PROXY,
+        })
+        opener = urllib.request.build_opener(proxy_handler)
+        urllib.request.install_opener(opener)
+
       req = urllib.request.Request(file.thumbnail, headers={
         'User-Agent': vars.USER_AGENT,
       })

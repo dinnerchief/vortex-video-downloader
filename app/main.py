@@ -338,12 +338,15 @@ def api_thumb():
     
     try:
         import urllib.request
-        proxy_handler = urllib.request.ProxyHandler({
+        
+        if vars.PROXY:
+            proxy_handler = urllib.request.ProxyHandler({
             "http": vars.PROXY,
             "https": vars.PROXY,
-        })
-        opener = urllib.request.build_opener(proxy_handler)
-        urllib.request.install_opener(opener)
+            })
+            opener = urllib.request.build_opener(proxy_handler)
+            urllib.request.install_opener(opener)
+        
         req = urllib.request.Request(url, headers={
             'User-Agent': vars.USER_AGENT,
         })
