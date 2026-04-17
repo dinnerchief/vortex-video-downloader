@@ -54,7 +54,7 @@ def load_state():
 
             files.files[f.id] = f
 
-        print(f'[vortex] State restored: {len(files)} files, proxy={vars.PROXY!r}, dir={vars.USER_DOWNLOAD_DIR}')
+        print(f'[vortex] State restored: {len(files.files)} files, proxy={vars.PROXY!r}, dir={vars.USER_DOWNLOAD_DIR}')
     except Exception as e:
         print(f'[vortex] Failed to load state: {e}')
 
