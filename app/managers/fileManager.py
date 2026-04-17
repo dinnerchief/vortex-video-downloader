@@ -1,6 +1,5 @@
+from yt_dlp.utils import sanitize_path
 from yt_dlp import YoutubeDL
-
-from subprocess import Popen, PIPE
 from pathlib import Path
 
 import threading
@@ -41,12 +40,14 @@ class File:
     self.title = title
     self.source = source
     self.site = utils.detect_site(source)
-    self.filename = filename
     self.thumbnail = thumbnail
     self.quality_options = quality_options
 
+    self.filename = filename
+    self.path = vars.USER_DOWNLOAD_DIR
+
   def filepath(self):
-    return os.path.join(vars.USER_DOWNLOAD_DIR, f"{self.id}_{self.title}.mp4")
+    return os.path.join(self.path, self.filename)
 
   def remove_locally(self):
     fp = self.filepath()
@@ -70,6 +71,7 @@ class File:
       "quality_options": self.quality_options,
       "filename": self.filename,
       "filepath": self.filepath(),
+      "path": self.path,
       "created_at": self.created_at,
       "downloaded": self.downloaded,
       "quality": self.quality,
@@ -124,18 +126,13 @@ class FileManager:
         os.remove(os.path.join(thumb_dir, filename))
 
   def thumbnail_path(self, file_id: str | None = None):
-    thumb_dir = os.path.join(vars.USER_DOWNLOAD_DIR, ".thumbnails")
-
-    if not os.path.exists(thumb_dir):
-      os.mkdir(thumb_dir)
-
     if file_id:
-      for f in os.listdir(thumb_dir):
+      for f in os.listdir(vars.THUMBNAIL_DIR):
         if not f.startswith(file_id): continue
-        return os.path.join(thumb_dir, f)
+        return os.path.join(vars.THUMBNAIL_DIR, f)
       return None
 
-    return thumb_dir
+    return vars.THUMBNAIL_DIR
   
   def download_thumbnail(self, file: File):
     thumb_dir = self.thumbnail_path()
@@ -186,23 +183,12 @@ class FileManager:
       thread.join()
 
   def sync_local_files(self):
-    # Reset downloaded status
     for id in self.files:
       file = self.get_file(id)
-      file.downloaded = False
-      if file.status == vars.STATUS.DONE:
+      file.downloaded = os.path.exists(file.filepath())
+      if file.status == vars.STATUS.DONE and not file.downloaded:
         file.status = vars.STATUS.QUEUED
-
-    # Refresh downloaded status
-    for l_file in os.listdir(vars.USER_DOWNLOAD_DIR):
-      if l_file.endswith(".part") or l_file.endswith(".tmp") or l_file.endswith(".ytdl"): continue
-
-      id = l_file.split("_")[0]
-      file = self.get_file(id)
-      if not file: continue
-      
-      file.downloaded = True
-      if file.status == vars.STATUS.QUEUED:
+      elif vars.STATUS.QUEUED and file.downloaded:
         file.status = vars.STATUS.DONE
 
   def download(self, file: File, quality: str):
@@ -349,13 +335,16 @@ class FileManager:
       if not quality_options:
         quality_options = ['best']
 
+      title = info.get('title', 'Unknown Title')
       file = File(
         url, 
-        filename,
-        info.get('title', 'Unknown Title'), 
+        "unnamed",
+        title, 
         info.get('thumbnail', ''),
         quality_options
       )
+
+      file.filename = sanitize_path(f"{file.id}_{title}.mp4", True)
 
       return file
     

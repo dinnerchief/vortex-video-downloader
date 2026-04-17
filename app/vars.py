@@ -14,10 +14,14 @@ COOKIE_FILE = ''
 # Leave as empty string '' to connect directly
 PROXY = ''
 
-DOWNLOAD_DIR = os.path.join(os.path.dirname(__file__), 'downloads')
 STATE_FILE = os.path.join(os.path.dirname(__file__), 'vortex_state.json')
 
+DOWNLOAD_DIR = os.path.join(os.path.dirname(__file__), 'downloads')
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+
+THUMBNAIL_DIR = os.path.join(os.path.dirname(__file__), '.thumbnails')
+os.makedirs(THUMBNAIL_DIR, exist_ok=True)
+
 
 # User-configurable download folder
 USER_DOWNLOAD_DIR = DOWNLOAD_DIR

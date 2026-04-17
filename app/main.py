@@ -1,16 +1,14 @@
 from flask import Flask, request, jsonify, send_file, send_from_directory, Response
 from managers import FileManager, File
 from utils import format_filename
+from yt_dlp.utils import sanitize_path
 
 import os
 import vars
 import json
-import urllib
 
 app = Flask(__name__, static_folder='static', static_url_path="/static")
 
-
-# In-memory job store: {job_id: {...}}
 files = FileManager()
 
 
@@ -40,23 +38,30 @@ def load_state():
             vars.USER_DOWNLOAD_DIR = d
 
         for file in state.get('files', []):
+            title = file.get('title')
+            id = file.get("id")
+
             f = File(
                 file.get('source'),
-                file.get('filename'),
-                file.get('title'),
+                "unnamed",
+                title,
                 file.get('thumbnail'),
                 file.get('quality_options')
             )
 
+            filepath = file.get('filepath')
+            f.filename = os.path.basename(filepath)
+            f.path = os.path.dirname(filepath)
             f.created_at = file.get('created_at')
             f.downloaded = file.get('downloaded')
-            f.id = file.get('id')
+            f.id = id
 
             files.files[f.id] = f
 
         print(f'[vortex] State restored: {len(files.files)} files, proxy={vars.PROXY!r}, dir={vars.USER_DOWNLOAD_DIR}')
     except Exception as e:
         print(f'[vortex] Failed to load state: {e}')
+        exit(1)
 
 
 # ──────────────────────────── Routes ────────────────────────────
@@ -319,17 +324,6 @@ def api_proxy():
         return jsonify({'proxy': vars.PROXY})
     return jsonify({'proxy': vars.PROXY})
 
-# @app.route('/api/check_files', methods=['POST'])
-# def api_check_files():
-#     """Return list of done job ids whose files are missing from disk."""
-#     missing = []
-#     for job in jobs.values():
-#         if job.get('status') == 'done':
-#             fp = job.get('filepath', '')
-#             if not fp or not os.path.exists(fp):
-#                 missing.append(job['id'])
-#     return jsonify({'missing': missing})
-
 @app.route('/api/thumb')
 def api_thumb():
     url = request.args.get('url', '').strip()
@@ -368,22 +362,20 @@ def api_file_thumb(file_id):
         return jsonify({'error': 'File not found'}), 404
     
     try:
-        thumb_dir = os.path.join(vars.USER_DOWNLOAD_DIR, ".thumbnails")
-        for filename in os.listdir(thumb_dir):
-            if not filename.startswith(file_id): continue
+        thumb_path = files.thumbnail_path(file.id)
+        if thumb_path == None: return Response(), 404
+    
+        ext = os.path.basename(thumb_path).split(os.path.extsep)[-1]
+        mimetype = f"image/{ext}"
+        if ext == 'webp': mimetype = "image/png"
 
-            ext = filename.split(os.path.extsep)[-1]
-            mimetype = f"image/{ext}"
-            if ext == 'webp': mimetype = "image/png"
+        return send_file(
+            thumb_path,
+            mimetype=mimetype,
+            download_name=format_filename(file.title, keep_ext=False),
+            as_attachment=True
+        )
 
-            return send_file(
-                os.path.join(thumb_dir, filename),
-                mimetype=mimetype,
-                download_name=format_filename(file.title, keep_ext=False),
-                as_attachment=True
-            )
-
-        return Response(), 404
     except Exception as e:
         return str(e), 502
 
