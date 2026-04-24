@@ -1,22 +1,4 @@
 
-const el = (tag = "div", props = {}, ...inner) => {
-  const el = document.createElement(tag);
-  if (typeof props == "string") el.className = props;
-  else Object.assign(el, props)
-  el.append(...inner)
-  return el
-}
-
-
-function hide(el) {
-  el.style.display = "none"
-}
-
-function show(el) {
-  el.style.display = null
-}
-
-
 class Card {
 
   /**
@@ -55,7 +37,7 @@ class Card {
     this.elThumb.style = "position:relative;width:100%;height:160px;overflow:hidden;flex-shrink:0;"
     this.elThumb.addEventListener("click", () => file.downloaded && openPlayer(file.id))
 
-    this.elTitle = el("div", "job-title", esc(file.title || file.source))
+    this.elTitle = el("div", "job-title", file.title || file.source)
     this.elSite = el("span", "job-site")
     this.elSite.innerHTML = siteBadgeHtml(file.site, file.source)
     this.elBadge = el("span", `status-badge badge-${file.downloaded ? "done" : "queued"} job-badge`, file.downloaded ? "done" : "queued")
@@ -112,6 +94,37 @@ class Card {
         }).then(_ => update())
       }
     }, "✕")
+    this.elBtnDropdown = dropdown("...", { className: "icon-btn" }, [
+      {
+        lable: "↺ Refetch",
+        onclick: () => {
+          dropdownClose()
+          const bak = { title: this.file.title }
+          this.file.title = "< Refetching... >"
+          this.render()
+          fetch(`/api/files/${file.id}/refetch`, {
+            method: "POST"
+          }).then(res => res.json()).then(rawFile => {
+            this.file = new APIFile(rawFile)
+          })
+          .catch(_ => {
+            this.file.title = bak.title
+          }).finally(() => this.render())
+        }
+      },
+      {
+        classList: ["danger"],
+        lable: "✕ Remove",
+        onclick: () => {
+          this.hide();
+          dropdownClose()
+          callDeleteFile(file.id).catch((e) => {
+            console.error(e)
+            this.show()
+          }).then(_ => update())
+        }
+      }
+    ])
 
     this.elActStart = el("button", {
       className: "icon-btn start", title: "Start download", onclick: () => this.startDownload()
@@ -139,7 +152,7 @@ class Card {
         this.elActRedownload,
         this.elBtnReveal,
         this.elBtnCopy,
-        this.elBtnDel
+        this.elBtnDropdown
       )
     )
 
@@ -176,9 +189,8 @@ class Card {
 
     this.elPrgsFill.className = `progress-bar-fill ${['done', 'error'].includes(status) ? status : ''}`
 
-    this.elTitle.textContent = esc(file.title || file.source)
+    this.elTitle.textContent = file.title || file.source
     this.elSite.innerHTML = siteBadgeHtml(file.site, file.source)
-    this.elTitle.textContent = esc(file.title || file.source)
 
     // if (this.thumbnail != file.thumbnail) {
     //   this.thumbnail = file.thumbnail

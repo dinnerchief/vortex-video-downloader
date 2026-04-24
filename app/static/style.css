@@ -1127,6 +1127,37 @@ video#mainVideo {
 }
 
 
+/* Dropdown */
+.dropdown-ul {
+  position: absolute;
+  z-index: 999;
+  align-items: center;
+  border-radius: var(--radius-sm);
+  
+  background: var(--surface2);
+  color: var(--text2);
+  border: 1px solid var(--border2);
+  overflow: hidden;
+}
+.dropdown-ul .item {
+  list-style: none;
+  padding: 8px 8px;
+
+  cursor: pointer;
+}
+.dropdown-ul .item:hover {
+  border-color: var(--text3); color: var(--text);
+}
+.dropdown-ul .item.danger {
+  background: transparent;
+  color: var(--accent3);
+}
+.dropdown-ul .item.danger:hover { background: rgba(255,71,71,.1); }
+
+.invisible {
+  display: none;
+}
+
 
 /* ── SCROLLBAR ── */
 ::-webkit-scrollbar { width: 6px; }
