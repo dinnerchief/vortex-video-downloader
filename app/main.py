@@ -1,7 +1,6 @@
 from flask import Flask, request, jsonify, send_file, send_from_directory, Response
 from managers import FileManager, File
 from utils import format_filename
-from yt_dlp.utils import sanitize_path
 
 import os
 import vars

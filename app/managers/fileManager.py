@@ -1,4 +1,4 @@
-from yt_dlp.utils import sanitize_path
+from yt_dlp.utils import sanitize_filename
 from yt_dlp import YoutubeDL
 from pathlib import Path
 
@@ -321,8 +321,6 @@ class FileManager:
       info = ydl.extract_info(url, download=False)
       if info is None:
         raise ValueError("Could not extract info")
-      
-      filename = ydl.prepare_filename(info)
 
       formats = info.get('formats', [])
       # Build quality options
@@ -344,7 +342,7 @@ class FileManager:
         quality_options
       )
 
-      file.filename = sanitize_path(f"{file.id}_{title}.mp4", True)
+      file.filename = f"{file.id}_" + sanitize_filename(f"{title}.mp4", True)
 
       return file
     
