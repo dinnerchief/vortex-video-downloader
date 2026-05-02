@@ -132,34 +132,74 @@ function startAll() {
   })
 }
 
-async function handleFetch() {
-  const url = document.getElementById('urlInput').value.trim();
-  if (!url) { toast('Paste a URL first', 'error'); return; }
+const urlInput = document.getElementById('urlInput');
+const urlInputsContainer = document.getElementById('urlInputs');
 
-  const btn = document.getElementById('fetchBtn');
-  const icon = document.getElementById('fetchBtnIcon');
+function updateInputs() {
+  const inputs = [...urlInputsContainer.childNodes]
+    .filter(v => v instanceof HTMLInputElement)
+    .map(v => (v.value = v.value.trim(), v))
+  const filtered = inputs.filter(v => !v.value && document.activeElement !== v)
+
+  // remove empty fields except one
+  filtered
+    .slice(1)
+    .forEach(v => v.remove())
+
+  // move empty field to end
+  const empty = filtered.at(0)
+  console.log(filtered, empty);
+  if (empty) urlInputsContainer.insertBefore(empty, null)
+  
+  if (inputs.filter(v => !v.value).length == 0) {
+    const clone = urlInput.cloneNode()
+    clone.value = ''
+    
+    clone.addEventListener("input", updateInputs)
+    clone.addEventListener("blur", updateInputs)
+
+    urlInputsContainer.append(clone)
+  }
+}
+
+urlInput.addEventListener("input", updateInputs)
+urlInput.addEventListener("blur", updateInputs)
+
+const btn = document.getElementById('fetchBtn');
+const icon = document.getElementById('fetchBtnIcon');
+
+async function handleFetch() {
+  const inputsNodes = document.getElementById('urlInputs').childNodes
+  const inputs = [...inputsNodes].filter(v => v instanceof HTMLInputElement && v.value.trim())
+  
+  if (inputs.length === 0) { toast('Paste a URL first', 'error'); return; }
+  
+  inputsNodes.forEach(v => (v.disabled = true))
   btn.disabled = true;
   icon.innerHTML = '<span class="spinner" style="display:inline-block;vertical-align:middle;margin:-2px 4px 0 0"></span>';
 
-  try {
-    const data = await callFetchFile(url)
-    if (data.error) throw new Error(data.error || 'Failed to fetch info');
+  await Promise.all(inputs.map(async input => {
+    const url = input.value.trim()
+    try {
+      const data = await callFetchFile(url)
+      if (data.error) throw new Error(data.error || 'Failed to fetch info');
+  
+      const file = new APIFile(data)
 
-    const file = new APIFile(data)
-
-    await update()
-
-    toast(`Added: ${file.title.slice(0, 40)}...`, 'success');
-
-    document.getElementById('urlInput').value = '';
-
-  } catch (e) {
-    console.error(e)
-    toast('Error: ' + e.message, 'error');
-  } finally {
+      input.value = '';
+  
+      toast(`Added: ${file.title.slice(0, 40)}...`, 'success');
+    } catch (e) {
+      console.error(e)
+      toast('Error: ' + e.message, 'error');
+    }
+  })).finally(async () => {
+    inputsNodes.forEach(v => (v.disabled = false))
     btn.disabled = false;
     icon.textContent = '⚡';
-  }
+    updateInputs()
+    await update()
+  })
 }
 
 const sortByCreatedAtASC = (a, b) => (a.file.created_at || 0) - (b.file.created_at || 0) 

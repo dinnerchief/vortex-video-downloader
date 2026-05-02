@@ -37,11 +37,15 @@
     <div class="input-section">
       <div class="input-label">// paste video url</div>
       <div class="url-row">
-        <input class="url-input" id="urlInput" type="text" placeholder="https://www.youtube.com/watch?v=..."
-          autocomplete="off" spellcheck="false" />
-        <button class="btn btn-primary" id="fetchBtn" onclick="handleFetch()">
-          <span id="fetchBtnIcon">⚡</span> Fetch
-        </button>
+        <div id="urlInputs" style="display: flex; width: 100%; flex-direction: column; gap: 10px;">
+          <input class="url-input" id="urlInput" type="text" placeholder="https://www.youtube.com/watch?v=..."
+            autocomplete="off" spellcheck="false" />
+        </div>
+        <div>
+          <button class="btn btn-primary" id="fetchBtn" onclick="handleFetch()">
+            <span id="fetchBtnIcon">⚡</span> Fetch
+          </button>
+        </div>
       </div>
 
       <div class="folder-row">
