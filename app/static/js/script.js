@@ -207,7 +207,7 @@ const sortByCreatedAtDESC = (a, b) => (b.file.created_at || 0) - (a.file.created
 const sortByTitleASC = (a, b) => (a.file.title || '').localeCompare(b.file.title || '')
 const sortByTitleDESC = (a, b) => (b.file.title || '').localeCompare(a.file.title || '') 
 const sortByStatus = (a, b) => {
-  const order = { downloading: 0, queued: 1, error: 2, done: 3 };
+  const order = { [STATUS.DOWNLOADING]: 0, [STATUS.QUEUED]: 1, [STATUS.ERROR]: 2, [STATUS.DONE]: 3 };
   return (order[a.file.status] || 9) - (order[b.file.status] || 9);
 }
 
@@ -300,7 +300,7 @@ document.addEventListener("DOMContentLoaded", async _ => {
   cards.applyFilters()
 
   setInterval(async () => {
-    if (![...cards.values()].find(c => ['downloading'].includes(c.file.status))) return
+    if (![...cards.values()].find(c => [STATUS.DOWNLOADING].includes(c.file.status))) return
     await update()
   }, 1000)
 })

@@ -55,6 +55,10 @@ def load_state():
             f.downloaded = file.get('downloaded')
             f.id = id
 
+            f.progress = file.get("progress")
+            f.eta = file.get("progress")
+            f.speed = file.get("speed")
+
             files.files[f.id] = f
 
         print(f'[vortex] State restored: {len(files.files)} files, proxy={vars.PROXY!r}, dir={vars.USER_DOWNLOAD_DIR}')
@@ -208,7 +212,7 @@ def api_cancel_job(file_id: str):
     if not file:
         return jsonify({'error': 'File not found'}), 404
 
-    file.cancel()
+    files.stop(file)
 
     save_state()
     return jsonify({ 'ok': True })

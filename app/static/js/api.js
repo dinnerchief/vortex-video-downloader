@@ -1,4 +1,11 @@
 
+const STATUS = {
+  QUEUED: "queued",
+  DOWNLOADING: "downloading",
+  ERROR: "error",
+  DONE: "done"
+}
+
 /**
  * 
  * @param {string} file_id 
@@ -74,10 +81,16 @@ class APIFile {
     this.description = raw.description || ''
   }
 
+  async cancel() {
+    const data = await callCancel(this.id)
+    if (data.error) throw new Error(data.error)
+    this.status = STATUS.QUEUED
+  }
+
   async download(quality) {
     const data = await callFileDownload(this.id, quality)
     if (data.error) throw new Error(data.error)
-    this.status = 'downloading'
+    this.status = STATUS.DOWNLOADING
     return data
   }
 

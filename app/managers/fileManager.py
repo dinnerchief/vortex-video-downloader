@@ -4,6 +4,7 @@ from pathlib import Path
 
 import threading
 import asyncio 
+import signal
 import urllib
 import uuid
 import json
@@ -98,7 +99,7 @@ class FileManager:
     return self.files.get(id)
   
   def remove_file(self, file: File, include_local = False):
-    self.cancel(file)
+    self.stop(file)
 
     if include_local:
       file.remove_locally()
@@ -271,10 +272,13 @@ class FileManager:
             break
 
         rc = await proc.wait()
-        if file.status not in (vars.STATUS.ERROR, vars.STATUS.DONE):
+        if file.process and file.status not in (vars.STATUS.ERROR, vars.STATUS.DONE):
           # если процесс завершился без явного DONE/ERROR
           file.status = vars.STATUS.ERROR
           file.error = f"Subprocess exited with code {rc}"
+        elif file.process == None:
+          # если процесс был терминирован программно FileManager.stop(file)
+          print(f"[file-{file.id}] Downloading proccess canceled. RC={rc}")
         else:
           print(f"[file-{file.id}] Downloading proccess successfull done. RC={rc}")
 
@@ -291,14 +295,11 @@ class FileManager:
     return True
 
 
-  def cancel(self, file: File):
+  def stop(self, file: File):
     if file.process:
       file.process.terminate()
       file.process = None
       file.status = vars.STATUS.QUEUED
-      file.progress = 0
-      file.eta = ''
-      file.speed = ''
 
     return True
 

@@ -13,6 +13,9 @@
 </head>
 
 <body>
+  <script src="/static/js/utils.js"></script>
+  <script src="/static/js/api.js"></script>
+
   <div id="dropdown" style="position: relative;"></div>
 
   <div class="app">
@@ -91,11 +94,11 @@
       <div class="filter-bar" id="filterBar" style="display:none">
         <input class="filter-search" id="filterSearch" placeholder="🔍 Search titles..." oninput="handleFilterQuery(this.value)" />
         <div class="filter-chips" id="filterChips">
-          <button class="chip active" data-status="all" onclick="handleFilterStatus(this, 'all')">All</button>
-          <button class="chip" data-status="queued" onclick="handleFilterStatus(this, 'queued')">Queued</button>
-          <button class="chip" data-status="downloading" onclick="handleFilterStatus(this, 'downloading')">Downloading</button>
-          <button class="chip" data-status="done" onclick="handleFilterStatus(this, 'done')">Done</button>
-          <button class="chip" data-status="error" onclick="handleFilterStatus(this, 'error')">Error</button>
+          <button class="chip active" onclick="handleFilterStatus(this, 'all')">All</button>
+          <button class="chip" onclick="handleFilterStatus(this, STATUS.QUEUED)">Queued</button>
+          <button class="chip" onclick="handleFilterStatus(this, STATUS.DOWNLOADING)">Downloading</button>
+          <button class="chip" onclick="handleFilterStatus(this, STATUS.DONE)">Done</button>
+          <button class="chip" onclick="handleFilterStatus(this, STATUS.ERROR)">Error</button>
         </div>
         <div class="filter-chips" id="siteChips"></div>
         <select class="filter-search" id="sortSelect" onchange="handleSort(this.value)" style="width:auto;padding:7px 10px">
@@ -177,10 +180,7 @@
 
   <!-- TOASTS -->
   <div class="toast-container" id="toastContainer"></div>
-
-  <script src="/static/js/utils.js"></script>
   
-  <script src="/static/js/api.js"></script>
   <script src="/static/js/card.js"></script>
   <script src="/static/js/script.js"></script>
   

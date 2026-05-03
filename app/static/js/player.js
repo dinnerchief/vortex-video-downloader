@@ -9,7 +9,7 @@ const vid = () => document.getElementById('mainVideo');
 
 function getDoneJobs() {
   return Object.values(jobs)
-    .filter(j => j.status === 'done' && j.filepath)
+    .filter(j => j.status === STATUS.DONE && j.filepath)
     .sort((a, b) => (a.created_at || 0) - (b.created_at || 0));
 }
 

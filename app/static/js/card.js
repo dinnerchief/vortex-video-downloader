@@ -37,19 +37,29 @@ class Card {
     this.elThumb.style = "position:relative;width:100%;height:160px;overflow:hidden;flex-shrink:0;"
     this.elThumb.addEventListener("click", () => file.downloaded && openPlayer(file.id))
 
+
+
     this.elTitle = el("div", "job-title", file.title || file.source)
+
     this.elSite = el("span", "job-site")
     this.elSite.innerHTML = siteBadgeHtml(file.site, file.source)
-    this.elBadge = el("span", `status-badge badge-${file.downloaded ? "done" : "queued"} job-badge`, file.downloaded ? "done" : "queued")
+
+    this.elBadge = el("span", `status-badge badge-${file.downloaded ? STATUS.DONE : STATUS.QUEUED} job-badge`, file.downloaded ? STATUS.DONE : STATUS.QUEUED)
+
+
 
     this.elSpeed = el("span", "", "0B/s")
     this.elSpeed.style = "color:var(--accent);font-weight:500"
+
     const elSep = el("span", "", "|")
     elSep.style = "color:var(--border2);padding:0 6px"
+
     this.elEta = el("span", "", "99:99")
     this.elEta.style = "color:var(--accent2)"
     const elEtaWrap = el("span", "", "ETA ", this.elEta)
     elEtaWrap.style = "color:var(--text2)"
+
+
 
     this.elError = el("span", "", "ERROR")
     this.elError.style = "color:var(--accent3);"
@@ -84,7 +94,13 @@ class Card {
       )
     )
 
-    this.elBtnCopy = el("button", { className: "icon-btn", title: "Copy link", onclick: () => copyToClipboard(file.source) }, "🔗")
+    this.elBtnCancel = el("button", {
+      className: "icon-btn", title: "Cancel (progress will be saved in cache)",
+      onclick: () => this.file.cancel().catch(e => toast(e, "error")).finally(() => this.render())
+    }, "⏸")
+    this.elBtnCopy = el("button", {
+      className: "icon-btn", title: "Copy link", onclick: () => copyToClipboard(file.source)
+    }, "🔗")
     this.elBtnDel = el("button", {
       className: "icon-btn del", title: "Remove", onclick: () => {
         this.hide();
@@ -107,9 +123,9 @@ class Card {
           }).then(res => res.json()).then(rawFile => {
             this.file = new APIFile(rawFile)
           })
-          .catch(_ => {
-            this.file.title = bak.title
-          }).finally(() => this.render())
+            .catch(_ => {
+              this.file.title = bak.title
+            }).finally(() => this.render())
         }
       },
       {
@@ -150,6 +166,7 @@ class Card {
         this.elSlotQuality,
         this.elActStart,
         this.elActRedownload,
+        this.elBtnCancel,
         this.elBtnReveal,
         this.elBtnCopy,
         this.elBtnDropdown
@@ -164,7 +181,7 @@ class Card {
   }
 
   async startDownload() {
-    this.file.status = 'downloading'
+    this.file.status = STATUS.DOWNLOADING
     this.render()
     return await this.file.download(this.quality)
   }
@@ -187,7 +204,7 @@ class Card {
     this.elBadge.className = `status-badge badge-${status} job-badge`
     this.elBadge.textContent = status
 
-    this.elPrgsFill.className = `progress-bar-fill ${['done', 'error'].includes(status) ? status : ''}`
+    this.elPrgsFill.className = `progress-bar-fill ${[STATUS.DONE, STATUS.ERROR].includes(status) ? status : ''}`
 
     this.elTitle.textContent = file.title || file.source
     this.elSite.innerHTML = siteBadgeHtml(file.site, file.source)
@@ -197,8 +214,7 @@ class Card {
     //   this.elThumbImg.src = file.thumbnail
     // }
 
-    if (['done', 'error', 'downloading'].includes(status)) {
-      this.elEta.textContent = file.eta
+    if ([STATUS.DONE, STATUS.ERROR, STATUS.DOWNLOADING].includes(status)) {
       this.elSpeed.textContent = file.speed
       this.elEta.textContent = file.eta
       this.elError.textContent = file.error
@@ -216,22 +232,27 @@ class Card {
     hide(this.elActStart)
     hide(this.elPlayOverlay)
     hide(this.elSlotQuality)
+    hide(this.elBtnCancel)
 
     this.elThumb.style.cursor = null
     this.elQuality.textContent = this.quality
 
     switch (status) {
-      case "queued":
+      case STATUS.QUEUED:
         show(this.elActStart)
         show(this.elSlotQuality)
+        if (this.file.progress > 0) {
+          show(this.elPct)
+          show(this.elPrgsWrap)
+        }
         break;
-      case "error":
+      case STATUS.ERROR:
         show(this.elError)
         show(this.elActRedownload)
         show(this.elPrgsWrap)
         show(this.elSlotQuality)
         break
-      case "done":
+      case STATUS.DONE:
         show(this.elPlayOverlay)
         show(this.elQuality)
         show(this.elBtnReveal)
@@ -239,7 +260,8 @@ class Card {
         this.elThumb.style.cursor = "pointer"
         this.elPrgsFill.style.width = "100%"
         break
-      case "downloading":
+      case STATUS.DOWNLOADING:
+        show(this.elBtnCancel)
         show(this.elMetaDownloading)
         show(this.elPct)
         show(this.elPrgsWrap)
